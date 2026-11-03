@@ -302,6 +302,9 @@ final class MITMHandler: ChannelInboundHandler, RemovableChannelHandler {
     private var head: HTTPRequestHead?
     private var bodyBuffer = ByteBuffer()
     private var startedAt = Date()
+    private let tunnelOpenedAt = Date()
+    private var sawRequest = false
+    private var reportedFailure = false
 
     init(group: EventLoopGroup,
          onCapture: @escaping @Sendable (CapturedTransaction) -> Void,
@@ -322,12 +325,35 @@ final class MITMHandler: ChannelInboundHandler, RemovableChannelHandler {
         self.httpDecoder = httpDecoder
     }
 
+    /// A TLS failure before any decrypted request means the client rejected our
+    /// leaf certificate (CA not trusted / pinning) or the handshake broke. Without
+    /// this the tunnel would vanish silently and the UI would show nothing.
+    func errorCaught(context: ChannelHandlerContext, error: Error) {
+        if !sawRequest && !reportedFailure {
+            reportedFailure = true
+            let detail = String(describing: error)
+            let hint: String
+            if detail.lowercased().contains("certificate") || detail.lowercased().contains("unknown ca")
+                || detail.lowercased().contains("alert") {
+                hint = "Client rejected the ProxyBoy certificate — is the Root CA installed and fully trusted on the device, or does the app pin certificates?"
+            } else {
+                hint = "TLS handshake with client failed."
+            }
+            onCapture(CapturedTransaction(
+                startedAt: tunnelOpenedAt, duration: Date().timeIntervalSince(tunnelOpenedAt),
+                method: "CONNECT", scheme: "https", host: host, port: port, path: "",
+                error: "\(hint) (\(detail))"))
+        }
+        context.close(promise: nil)
+    }
+
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         switch unwrapInboundIn(data) {
         case .head(let head):
             self.head = head
             self.bodyBuffer.clear()
             self.startedAt = Date()
+            self.sawRequest = true
         case .body(var chunk):
             bodyBuffer.writeBuffer(&chunk)
         case .end:
