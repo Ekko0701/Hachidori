@@ -55,6 +55,11 @@ The request appears live in the list; select it to inspect headers, body (pretty
 preview / hex), and a timing waterfall. For HTTPS, install and trust the Root CA from the
 **Certificate** toolbar popover first.
 
+## Testing a real device
+
+Step-by-step guide (Korean) for pointing an iOS/Android build at ProxyBoy and
+rewriting its API / WebView responses: [docs/device-testing.md](docs/device-testing.md).
+
 ## Requirements
 
 - macOS 14+
