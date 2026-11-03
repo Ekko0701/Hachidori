@@ -37,12 +37,15 @@ swift run ProxyBoy
 
 ### 2-2. Root CA 설치 (HTTPS 복호화용)
 
-프록시를 설정한 **뒤에** 기기 브라우저에서 아래 주소를 엽니다. 이 주소는 ProxyBoy 자신이
-응답하므로 프록시 설정 전에는 열리지 않습니다.
+프록시를 설정한 뒤 기기 브라우저(Safari/Chrome)에서 **Mac IP와 포트를 그대로** 엽니다. 반드시 `http://`를
+붙여 입력하세요. 주소만 치면 검색이나 `https://`로 바뀌어 실패합니다.
 
 ```
-http://proxyboy.local
+http://192.168.120.xx:9090      ← Certificate 팝오버에 표시된 Mac IP:포트
 ```
+
+ProxyBoy 설치 페이지가 뜨면 프록시 연결이 된 것입니다. (`http://proxyboy.local`도 되지만 iOS가 `.local`을
+프록시 없이 직접 찾으려 해서 안 열리는 경우가 있어 IP 접속을 권장합니다.)
 
 - **iOS**
   1. "iOS profile (.mobileconfig)"를 눌러 프로파일을 내려받습니다.
@@ -245,7 +248,7 @@ console.log = (function (orig) { return function () { orig.apply(console, argume
 | 증상 | 확인할 것 |
 |------|-----------|
 | 리스트에 아무것도 안 뜸 | 기기 프록시 IP/포트, Mac과 같은 Wi-Fi인지, macOS 방화벽 허용, LAN 토글 후 Record 재시작 |
-| `http://proxyboy.local`이 안 열림 | 프록시를 먼저 설정했는지(이 주소는 프록시가 응답함), Record 중인지 |
+| 설치 페이지가 안 열림 | `http://`를 붙였는지, Record 중이고 상태 표시가 LAN IP인지(127.0.0.1이면 LAN 토글 후 Stop→Record), Mac 방화벽 허용, 같은 Wi-Fi인지. `proxyboy.local` 대신 `http://<Mac IP>:9090` 사용 |
 | HTTPS 호스트가 `ERR` / 앱만 실패 | iOS 전체 신뢰 설정, Android debug 빌드의 network_security_config, 피닝 여부 |
 | 규칙을 켰는데 응답이 그대로 | URL contains 철자, 위쪽에 먼저 걸리는 다른 규칙, 규칙 Enabled 여부, 앱 캐시(화면 재진입) |
 | WebView가 빈 화면 | Rewrite 본문의 Content-Type이 `text/html`인지, HTML이 완전한지 |

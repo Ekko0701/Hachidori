@@ -82,7 +82,7 @@ enum ProxyBoyHeadless {
             let bound = server.boundPort ?? port
             log("ProxyBoy listening on 0.0.0.0:\(bound)")
             if let ip = NetworkInterface.primaryIPv4() {
-                log("Devices: set proxy to \(ip):\(bound), then open http://proxyboy.local to install the CA")
+                log("Devices: set proxy to \(ip):\(bound), then open http://\(ip):\(bound) to install the CA")
             }
         } catch {
             log("Failed to start: \(error)")

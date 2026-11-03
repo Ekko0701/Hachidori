@@ -162,18 +162,25 @@ final class ProxyRequestHandler: ChannelInboundHandler, RemovableChannelHandler 
             return
         }
 
-        guard let target = Target(from: head) else {
-            respondError(context: context, status: .badRequest, message: "Cannot resolve target host")
+        // Serve the Root CA to on-device browsers over plain HTTP (before trust exists).
+        // Reached either via the proxy as `http://proxyboy.local/...`, or by opening the
+        // proxy's own address directly (`http://<mac-ip>:9090/`), which arrives as an
+        // origin-form request — something a real proxy client never sends.
+        let isOriginForm = head.uri.hasPrefix("/")
+        if let ca = self.ca, isOriginForm || Target(from: head)?.host == "proxyboy.local" {
+            let hostHeader = head.headers.first(name: "Host") ?? "proxyboy.local"
+            let (portalHost, portalPort) = Target.splitHostPort(hostHeader, defaultPort: 80)
+            let path = isOriginForm ? head.uri : (Target(from: head)?.path ?? "/")
+            RequestForwarder.serveCAPortal(to: channel, path: path, ca: ca)
+            onCapture(CapturedTransaction(
+                startedAt: started, duration: Date().timeIntervalSince(started),
+                method: head.method.rawValue, scheme: "http", host: portalHost, port: portalPort,
+                path: path, statusCode: 200))
             return
         }
 
-        // Serve the Root CA to on-device browsers over plain HTTP (before trust exists).
-        if let ca = self.ca, target.host == "proxyboy.local" {
-            RequestForwarder.serveCAPortal(to: channel, path: target.path, ca: ca)
-            onCapture(CapturedTransaction(
-                startedAt: started, duration: Date().timeIntervalSince(started),
-                method: head.method.rawValue, scheme: "http", host: target.host, port: target.port,
-                path: target.path, statusCode: 200))
+        guard let target = Target(from: head) else {
+            respondError(context: context, status: .badRequest, message: "Cannot resolve target host")
             return
         }
 
@@ -626,7 +633,8 @@ enum RequestForwarder {
         channel.writeAndFlush(HTTPServerResponsePart.end(nil), promise: nil)
     }
 
-    /// Landing portal for on-device CA install (`http://proxyboy.local`).
+    /// Landing portal for on-device CA install (`http://proxyboy.local` via the proxy,
+    /// or `http://<mac-ip>:<port>/` directly). Links are relative so both work.
     /// Routes by path: `.mobileconfig` (iOS profile), `.crt` (DER), else an HTML index.
     static func serveCAPortal(to channel: Channel, path: String, ca: CertificateAuthority) {
         let route = (path.split(separator: "?").first.map(String.init) ?? path).lowercased()
@@ -650,9 +658,9 @@ enum RequestForwarder {
     <body style="font-family:-apple-system,system-ui,sans-serif;max-width:32rem;margin:2rem auto;padding:0 1rem">
     <h2>Install ProxyBoy Root CA</h2>
     <p>Install the certificate, then <b>trust</b> it, to decrypt HTTPS traffic.</p>
-    <p><a href="http://proxyboy.local/proxyboy.mobileconfig" style="font-size:1.1rem">📱 iOS profile (.mobileconfig)</a><br>
+    <p><a href="/proxyboy.mobileconfig" style="font-size:1.1rem">📱 iOS profile (.mobileconfig)</a><br>
     <small>After install: Settings → General → About → Certificate Trust Settings → enable full trust.</small></p>
-    <p><a href="http://proxyboy.local/ca.crt" style="font-size:1.1rem">🤖 Android / other (.crt)</a><br>
+    <p><a href="/ca.crt" style="font-size:1.1rem">🤖 Android / other (.crt)</a><br>
     <small>Install as a CA certificate in system settings.</small></p>
     </body></html>
     """

@@ -174,8 +174,8 @@ struct CertificateInfoView: View {
                 if model.allowLANDevices {
                     VStack(alignment: .leading, spacing: 4) {
                         if let ip = model.lanIPAddress {
-                            Text("1. On the device Wi-Fi, set HTTP proxy to **\(ip):\(String(model.listenPort))**.")
-                            Text("2. Open **http://proxyboy.local** in the device browser to download the CA, install it, then trust it.")
+                            Text("1. On the device Wi-Fi, set HTTP proxy to **\(ip):\(String(model.listenPort))** (no authentication).")
+                            Text("2. In the device browser open **http://\(ip):\(String(model.listenPort))** to download the CA, install it, then trust it.")
                             Text("Android apps additionally need a debug build that trusts user CAs (network_security_config.xml).")
                                 .foregroundStyle(.tertiary)
                         } else {
