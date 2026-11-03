@@ -20,6 +20,7 @@ struct BreakpointConfigView: View {
         }
         .padding(16)
         .frame(width: 360)
+        .fixedSize(horizontal: false, vertical: true)
         .onChange(of: model.breakpointRequestsEnabled) { model.syncBreakpoints() }
         .onChange(of: model.breakpointResponsesEnabled) { model.syncBreakpoints() }
         .onChange(of: model.breakpointURLContains) { model.syncBreakpoints() }

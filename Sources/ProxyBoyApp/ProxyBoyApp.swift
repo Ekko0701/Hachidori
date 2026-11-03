@@ -361,7 +361,7 @@ final class AppModel {
 
 /// `ProxyBoy --snapshot-dir <dir>`: polls `<dir>/cmd.txt` for simple commands
 /// (`select <n>`, `tab <name>`, `mode <name>`, `group on|off`, `host <name>|all`,
-/// `search <text>`, `snap <file.png>`) so the UI can be driven and rendered to
+/// `search <text>`, `snap <file.png>`, `snapview cert|breakpoints <file.png>`) so the UI can be driven and rendered to
 /// PNG without screen-recording permission. Development/testing aid only.
 @MainActor
 final class DevSnapshotDriver {
@@ -407,6 +407,23 @@ final class DevSnapshotDriver {
             case "group": model.groupByHost = (arg == "on")
             case "host": model.hostFilter = (arg == "all") ? nil : arg
             case "search": model.searchText = arg
+            case "snapview":
+                // `snapview cert|breakpoints <file.png>`: render a popover's content at its
+                // ideal size (the same sizing a popover uses) without opening it.
+                let args = arg.split(separator: " ", maxSplits: 1).map(String.init)
+                guard args.count == 2 else { break }
+                let view: AnyView
+                switch args[0] {
+                case "cert": view = AnyView(CertificateInfoView().environment(model))
+                case "breakpoints": view = AnyView(BreakpointConfigView().environment(model))
+                default: continue
+                }
+                let renderer = ImageRenderer(content: view.background(Color(nsColor: .windowBackgroundColor)))
+                renderer.scale = 2
+                if let image = renderer.nsImage, let tiff = image.tiffRepresentation,
+                   let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+                    try? png.write(to: dir.appendingPathComponent(args[1]))
+                }
             case "snap":
                 // Give SwiftUI a couple of frames to lay out before rendering.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in

@@ -198,6 +198,9 @@ struct CertificateInfoView: View {
         }
         .padding(16)
         .frame(width: 360)
+        // Popovers size themselves from the ideal height, which for Text is a
+        // single line; this makes wrapped text report its real height.
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
