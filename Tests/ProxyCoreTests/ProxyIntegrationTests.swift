@@ -2,6 +2,8 @@ import XCTest
 import NIOCore
 import NIOPosix
 import NIOHTTP1
+import NIOSSL
+import NIOTLS
 @testable import ProxyCore
 
 /// End-to-end: raw NIO client → ProxyServer → local NIO origin server.
@@ -277,6 +279,83 @@ final class ProxyIntegrationTests: XCTestCase {
             .wait()
     }
 
+    // MARK: HTTPS tunnels
+
+    func testIdleTunnelClosedAfterHandshakeIsNotReportedAsError() throws {
+        let group = MultiThreadedEventLoopGroup(numberOfThreads: 2)
+        defer { try? group.syncShutdownGracefully() }
+        let ca = try makeTestCA()
+        let box = CaptureBox()
+        let proxy = ProxyServer(port: 0, ca: ca) { box.append($0) }
+        try proxy.start()
+        defer { proxy.stop() }
+        let proxyPort = try XCTUnwrap(proxy.boundPort)
+
+        // CONNECT, finish the TLS handshake trusting Hachidori's CA, then hang up without a request.
+        let channel = try openTunnel(proxyPort: proxyPort, host: "idle.example", trustCA: ca, group: group)
+        try channel.close().wait()
+        Thread.sleep(forTimeInterval: 0.2)
+
+        XCTAssertTrue(box.all().isEmpty, "idle spare connections must not show up as CONNECT ERR: \(box.all())")
+    }
+
+    func testClientRejectingLeafCertificateIsReported() throws {
+        let group = MultiThreadedEventLoopGroup(numberOfThreads: 2)
+        defer { try? group.syncShutdownGracefully() }
+        let ca = try makeTestCA()
+        let box = CaptureBox()
+        let proxy = ProxyServer(port: 0, ca: ca) { box.append($0) }
+        try proxy.start()
+        defer { proxy.stop() }
+        let proxyPort = try XCTUnwrap(proxy.boundPort)
+
+        // A client that does NOT trust the CA aborts the handshake.
+        XCTAssertThrowsError(try openTunnel(proxyPort: proxyPort, host: "pinned.example", trustCA: nil, group: group))
+        let deadline = Date().addingTimeInterval(2)
+        while box.all().isEmpty && Date() < deadline { Thread.sleep(forTimeInterval: 0.05) }
+
+        let tx = try XCTUnwrap(box.all().first)
+        XCTAssertEqual(tx.method, "CONNECT")
+        XCTAssertEqual(tx.host, "pinned.example")
+        XCTAssertTrue(tx.error?.contains("rejected the Hachidori certificate") == true, tx.error ?? "no error")
+    }
+
+    private func makeTestCA() throws -> CertificateAuthority {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("hachidori-proxy-tests-\(UUID().uuidString)", isDirectory: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        return try CertificateAuthority.generateOrLoad(directoryURL: dir)
+    }
+
+    /// Sends `CONNECT host:443` to the proxy, then runs a TLS handshake inside the tunnel.
+    /// Returns the channel once the handshake completed; throws when it fails.
+    private func openTunnel(proxyPort: Int, host: String, trustCA: CertificateAuthority?,
+                            group: EventLoopGroup) throws -> Channel {
+        let channel = try ClientBootstrap(group: group).connect(host: "127.0.0.1", port: proxyPort).wait()
+
+        // 1. Plain CONNECT and wait for "200 Connection Established".
+        let connected = channel.eventLoop.makePromise(of: Void.self)
+        try channel.pipeline.addHandler(ConnectResponseWaiter(promise: connected), name: ConnectResponseWaiter.name).wait()
+        var buf = channel.allocator.buffer(capacity: 128)
+        buf.writeString("CONNECT \(host):443 HTTP/1.1\r\nHost: \(host):443\r\n\r\n")
+        try channel.writeAndFlush(buf).wait()
+        try connected.futureResult.wait()
+        try channel.pipeline.removeHandler(name: ConnectResponseWaiter.name).wait()
+
+        // 2. TLS handshake through the tunnel.
+        var tls = TLSConfiguration.makeClientConfiguration()
+        if let trustCA {
+            let root = try NIOSSLCertificate(bytes: Array(trustCA.rootCertificatePEM.utf8), format: .pem)
+            tls.trustRoots = .certificates([root])
+        }
+        let sslContext = try NIOSSLContext(configuration: tls)
+        let handshake = channel.eventLoop.makePromise(of: Void.self)
+        try channel.pipeline.addHandler(try NIOSSLClientHandler(context: sslContext, serverHostname: host)).wait()
+        try channel.pipeline.addHandler(HandshakeWaiter(promise: handshake)).wait()
+        try handshake.futureResult.wait()
+        return channel
+    }
+
     private func fetchThroughProxy(proxyPort: Int,
                                    absoluteURL: String,
                                    host: String,
@@ -395,3 +474,36 @@ private final class ClientResponseCollector: ChannelInboundHandler {
         context.close(promise: nil)
     }
 }
+
+/// Completes its promise once the proxy's CONNECT reply header has fully arrived.
+private final class ConnectResponseWaiter: ChannelInboundHandler, RemovableChannelHandler {
+    typealias InboundIn = ByteBuffer
+    static let name = "connect-waiter"
+    private let promise: EventLoopPromise<Void>
+    private var received = ""
+    init(promise: EventLoopPromise<Void>) { self.promise = promise }
+    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        let buf = unwrapInboundIn(data)
+        received += buf.getString(at: buf.readerIndex, length: buf.readableBytes) ?? ""
+        if received.contains("\r\n\r\n") {
+            if received.hasPrefix("HTTP/1.1 200") { promise.succeed(()) } else { promise.fail(TunnelError.refused(received)) }
+        }
+    }
+    func errorCaught(context: ChannelHandlerContext, error: Error) { promise.fail(error) }
+    func channelInactive(context: ChannelHandlerContext) { promise.fail(TunnelError.closed) }
+}
+
+/// Resolves when NIOSSL reports the handshake finished, or fails on any TLS error.
+private final class HandshakeWaiter: ChannelInboundHandler {
+    typealias InboundIn = ByteBuffer
+    private let promise: EventLoopPromise<Void>
+    init(promise: EventLoopPromise<Void>) { self.promise = promise }
+    func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
+        if case TLSUserEvent.handshakeCompleted = event { promise.succeed(()) }
+        context.fireUserInboundEventTriggered(event)
+    }
+    func errorCaught(context: ChannelHandlerContext, error: Error) { promise.fail(error); context.close(promise: nil) }
+    func channelInactive(context: ChannelHandlerContext) { promise.fail(TunnelError.closed) }
+}
+
+private enum TunnelError: Error { case refused(String), closed }

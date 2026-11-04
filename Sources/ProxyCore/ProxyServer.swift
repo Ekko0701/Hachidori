@@ -3,6 +3,7 @@ import NIOCore
 import NIOPosix
 import NIOHTTP1
 import NIOSSL
+import NIOTLS
 
 /// A local MITM proxy.
 ///
@@ -305,6 +306,7 @@ final class MITMHandler: ChannelInboundHandler, RemovableChannelHandler {
     private let tunnelOpenedAt = Date()
     private var sawRequest = false
     private var reportedFailure = false
+    private var handshakeCompleted = false
 
     init(group: EventLoopGroup,
          onCapture: @escaping @Sendable (CapturedTransaction) -> Void,
@@ -325,11 +327,20 @@ final class MITMHandler: ChannelInboundHandler, RemovableChannelHandler {
         self.httpDecoder = httpDecoder
     }
 
-    /// A TLS failure before any decrypted request means the client rejected our
+    func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
+        if case TLSUserEvent.handshakeCompleted = event { handshakeCompleted = true }
+        context.fireUserInboundEventTriggered(event)
+    }
+
+    /// A TLS failure before the handshake finished means the client rejected our
     /// leaf certificate (CA not trusted / pinning) or the handshake broke. Without
     /// this the tunnel would vanish silently and the UI would show nothing.
+    ///
+    /// A tunnel that completed the handshake but then dropped without sending a
+    /// request is a spare connection the client opened speculatively and closed
+    /// when idle (iOS does this after ~30 s); that is not an error, so it is not captured.
     func errorCaught(context: ChannelHandlerContext, error: Error) {
-        if !sawRequest && !reportedFailure {
+        if !sawRequest && !reportedFailure && !handshakeCompleted {
             reportedFailure = true
             let detail = String(describing: error)
             let hint: String
