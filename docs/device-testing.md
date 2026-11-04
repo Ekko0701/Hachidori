@@ -12,7 +12,7 @@
 ## 1. Mac 쪽 준비 (한 번만)
 
 ```bash
-cd ~/Developer/personal/ProxyBoy
+cd ~/Developer/personal/Hachidori
 swift run Hachidori
 ```
 
