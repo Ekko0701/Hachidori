@@ -424,6 +424,12 @@ final class DevSnapshotDriver {
                    let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
                     try? png.write(to: dir.appendingPathComponent(args[1]))
                 }
+            case "sheet":
+                // `sheet rules`: open a sheet via notification so `snap` can capture it.
+                NotificationCenter.default.post(name: .devShowSheet, object: nil, userInfo: ["name": arg])
+            case "addrule":
+                model.overrideRules.append(OverrideRule(name: "Demo 500", urlContains: "/api/dashboard/notice",
+                                                        overrideStatus: true, statusCode: 500))
             case "snap":
                 // Give SwiftUI a couple of frames to lay out before rendering.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
@@ -435,7 +441,10 @@ final class DevSnapshotDriver {
     }
 
     private func snapshot(to url: URL) {
-        guard let window = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }),
+        // Prefer an open sheet (it is its own window), else the main window.
+        let window = NSApp.windows.first(where: { $0.isSheet && $0.isVisible })
+            ?? NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil })
+        guard let window,
               let view = window.contentView,
               let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
         view.cacheDisplay(in: view.bounds, to: rep)
@@ -443,4 +452,9 @@ final class DevSnapshotDriver {
             try? png.write(to: url)
         }
     }
+}
+
+extension Notification.Name {
+    /// Development only: ask the traffic view to present a named sheet.
+    static let devShowSheet = Notification.Name("ProxyBoy.devShowSheet")
 }

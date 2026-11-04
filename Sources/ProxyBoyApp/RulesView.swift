@@ -28,9 +28,37 @@ struct RulesView: View {
             .navigationSplitViewColumnWidth(min: 220, ideal: 260)
             .overlay {
                 if model.overrideRules.isEmpty {
-                    ContentUnavailableView("No Rules", systemImage: "slider.horizontal.3",
-                                           description: Text("Add a rule to override responses."))
+                    ContentUnavailableView {
+                        Label("No Rules", systemImage: "slider.horizontal.3")
+                    } description: {
+                        Text("Add a rule to override responses.")
+                    } actions: {
+                        Button("Add Rule", action: addRule)
+                            .buttonStyle(.borderedProminent)
+                    }
                 }
+            }
+            // macOS sheets don't draw primaryAction toolbar items, so put the
+            // add/remove controls where Settings-style lists keep them: below the list.
+            .safeAreaInset(edge: .bottom) {
+                HStack(spacing: 0) {
+                    Button(action: addRule) {
+                        Image(systemName: "plus").frame(width: 24, height: 20)
+                    }
+                    .help("Add rule")
+                    Divider().frame(height: 16)
+                    Button(action: removeSelectedRule) {
+                        Image(systemName: "minus").frame(width: 24, height: 20)
+                    }
+                    .disabled(selection == nil)
+                    .help("Remove selected rule")
+                    Spacer()
+                }
+                .buttonStyle(.borderless)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .background(.bar)
+                .overlay(alignment: .top) { Divider() }
             }
         } detail: {
             if let id = selection,
@@ -44,17 +72,23 @@ struct RulesView: View {
         .frame(minWidth: 680, minHeight: 480)
         .onChange(of: model.overrideRules) { model.syncRules() }
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    let rule = OverrideRule()
-                    model.overrideRules.append(rule)
-                    selection = rule.id
-                } label: { Label("Add Rule", systemImage: "plus") }
-            }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done") { dismiss() }
             }
         }
+    }
+
+    private func addRule() {
+        let rule = OverrideRule()
+        model.overrideRules.append(rule)
+        selection = rule.id
+    }
+
+    private func removeSelectedRule() {
+        guard let id = selection, let index = model.overrideRules.firstIndex(where: { $0.id == id }) else { return }
+        model.overrideRules.remove(at: index)
+        selection = model.overrideRules.indices.contains(index) ? model.overrideRules[index].id
+            : model.overrideRules.last?.id
     }
 
     private func ruleSummary(_ rule: OverrideRule) -> String {

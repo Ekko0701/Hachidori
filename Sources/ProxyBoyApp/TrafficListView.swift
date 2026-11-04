@@ -37,6 +37,9 @@ struct TransactionListView: View {
         .sheet(isPresented: $showingRules) {
             RulesView().environment(model)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .devShowSheet)) { note in
+            if note.userInfo?["name"] as? String == "rules" { showingRules = true }
+        }
     }
 
     @ToolbarContentBuilder
