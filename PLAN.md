@@ -1,4 +1,4 @@
-# ProxyBoy — 작업 계획
+# Hachidori — 작업 계획
 
 macOS용 HTTP/HTTPS 트래픽 디버깅 프록시 (Proxyman 유형).
 앱/웹 개발 시 요청·응답을 가로채 검사하는 도구.
@@ -9,9 +9,9 @@ macOS용 HTTP/HTTPS 트래픽 디버깅 프록시 (Proxyman 유형).
   (App Store 샌드박스는 시스템 프록시 변경·인증서 설치와 충돌 → 배제)
 
 > **진행 현황 (2026-09-04)**: Phase 0~2 완료. HTTP + **HTTPS(TLS MITM)** 가로채기 동작.
-> SPM 패키지(`ProxyCore` + `ProxyBoyApp`). `swift test` 통과, `curl -x`로 실제
-> `https://example.com`·`httpbin.org` 복호화·캡처 검증(헤드리스 `ProxyBoy --serve`).
-> 실기기 지원: 프록시 LAN 바인딩(0.0.0.0) + Mac IP 표시 + 기기용 CA 배포 포털(`http://proxyboy.local` → HTML/iOS `.mobileconfig`/`.crt`).
+> SPM 패키지(`ProxyCore` + `HachidoriApp`). `swift test` 통과, `curl -x`로 실제
+> `https://example.com`·`httpbin.org` 복호화·캡처 검증(헤드리스 `Hachidori --serve`).
+> 실기기 지원: 프록시 LAN 바인딩(0.0.0.0) + Mac IP 표시 + 기기용 CA 배포 포털(`http://hachidori.local` → HTML/iOS `.mobileconfig`/`.crt`).
 > Phase 3 완료: macOS 시스템 프록시 자동설정·원복(`SystemProxyConfigurator`), iOS 프로파일 생성.
 > WebSocket 완료: ws/wss 투명 릴레이 + 프레임 스니퍼로 메시지 캡처(로컬 e2e 검증).
 > **Phase 4 완료 (2026-11-03)**: 고밀도 리스트(Type/Size/Duration 열, 메서드·상태 색상, 호스트 그룹핑, 메서드/상태/타입 필터),
@@ -24,7 +24,7 @@ macOS용 HTTP/HTTPS 트래픽 디버깅 프록시 (Proxyman 유형).
 
 ```
  ┌──────────────┐    시스템 프록시 설정    ┌────────────────────────────┐
- │  대상 트래픽   │ ───────────────────▶ │        ProxyBoy 앱          │
+ │  대상 트래픽   │ ───────────────────▶ │        Hachidori 앱          │
  │ (앱/브라우저)  │                       │                            │
  └──────────────┘                       │  ┌──────────────────────┐  │
                                         │  │  Proxy Engine (NIO)  │  │
@@ -67,7 +67,7 @@ macOS용 HTTP/HTTPS 트래픽 디버깅 프록시 (Proxyman 유형).
 ## 3. 단계별 작업 계획
 
 ### Phase 0 — 프로젝트 스캐폴딩 ✅ 완료
-- [x] SPM 패키지 생성 (`ProxyCore` 라이브러리 + `ProxyBoyApp` SwiftUI 앱, Swift 6)
+- [x] SPM 패키지 생성 (`ProxyCore` 라이브러리 + `HachidoriApp` SwiftUI 앱, Swift 6)
 - [x] swift-nio 의존성 추가 (SSL/certificates/GRDB는 해당 Phase에서 추가)
 - [x] 3-패널 UI (사이드바·요청 테이블·상세 인스펙터) — 실데이터 연동
 - [ ] 엔타이틀먼트/서명 설정 (하드닝 런타임, 네트워크 클라이언트/서버) → 배포 Phase로 이동
@@ -83,12 +83,12 @@ macOS용 HTTP/HTTPS 트래픽 디버깅 프록시 (Proxyman 유형).
 - [x] 호스트별 leaf 인증서 동적 발급 + NIOSSLContext 캐싱
 - [x] `CONNECT` 처리, 양방향 TLS 종단 (leaf=서버역 / 원서버=클라역, 원서버 인증서 검증 유지)
 - [x] 복호화된 요청/응답 로깅 (ALPN http/1.1 고정)
-- [x] 검증: `ProxyBoy --serve` + `curl -x ... https://example.com --cacert rootCA.pem` → 200, 본문 복호화 확인
+- [x] 검증: `Hachidori --serve` + `curl -x ... https://example.com --cacert rootCA.pem` → 200, 본문 복호화 확인
 - 알려진 이슈: 200 응답 chunked 프레이밍이 터널 TLS를 깨뜨림 → `Content-Length: 0` 명시 + 파이프라인 교체 중 autoRead 일시정지로 해결
 
 ### Phase 3 — 시스템 통합 & 인증서 설치 UX ✅ 완료
 - [x] 녹화 시작 시 시스템 프록시 자동 설정, 중지·종료(willTerminate) 시 **원복** (`SystemProxyConfigurator`)
-- [x] Root CA 설치 가이드 + 기기 포털(`proxyboy.local`: HTML/`.mobileconfig`/`.crt`), 상태 표시
+- [x] Root CA 설치 가이드 + 기기 포털(`hachidori.local`: HTML/`.mobileconfig`/`.crt`), 상태 표시
 - [x] 녹화/초기화 토글, 상태 인디케이터, 실기기(LAN) 토글
 - [ ] (후속) 키체인 자동 신뢰(관리자 헬퍼)는 미구현 — 현재는 수동 신뢰
 
@@ -100,7 +100,7 @@ macOS용 HTTP/HTTPS 트래픽 디버깅 프록시 (Proxyman 유형).
 - [x] GitKraken/Fork 감성: 고밀도 리스트 + 모노스페이스 코드 뷰
 - [x] 타이밍: `TransactionTiming`(connectStarted/connected/requestSent/firstByte/responseReceived/completed) 엔진 기록 + 워터폴 뷰
 - [x] (Phase 5 선반영) 표시용 gzip/deflate/br 자동 해제(`BodyDecoder`, Compression 프레임워크), cURL 복사
-- 개발용 플래그: `ProxyBoy --record`(시스템 프록시 변경 없이 즉시 녹화), `--snapshot-dir <dir>`(cmd.txt로 UI 구동·PNG 렌더)
+- 개발용 플래그: `Hachidori --record`(시스템 프록시 변경 없이 즉시 녹화), `--snapshot-dir <dir>`(cmd.txt로 UI 구동·PNG 렌더)
 
 ### Phase 5 — 저장 & 편의 기능 (1주)
 - [ ] SQLite 영속화, 대용량 body 파일 오프로드, 세션 이력

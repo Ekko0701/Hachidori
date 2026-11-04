@@ -1,6 +1,6 @@
-# 실기기 테스트 가이드 — ProxyBoy로 API·WebView 응답 조작하기
+# 실기기 테스트 가이드 — Hachidori로 API·WebView 응답 조작하기
 
-실기기에서 빌드한 앱의 **자체 API 응답**과 **WebView 페이지 응답**을 ProxyBoy로
+실기기에서 빌드한 앱의 **자체 API 응답**과 **WebView 페이지 응답**을 Hachidori로
 가로채 원하는 대로 바꿔 보는 절차입니다. 앱 코드를 고치지 않고도 서버 오류, 빈 데이터,
 특정 필드 값, 다른 HTML 페이지 등을 시뮬레이션할 수 있습니다.
 
@@ -13,7 +13,7 @@
 
 ```bash
 cd ~/Developer/personal/ProxyBoy
-swift run ProxyBoy
+swift run Hachidori
 ```
 
 1. 툴바 오른쪽 **Certificate**(자물쇠) 버튼을 누릅니다.
@@ -23,7 +23,7 @@ swift run ProxyBoy
    예: `192.168.0.12:9090`
 4. 툴바 **Record**(⌘R)를 누릅니다. 왼쪽 아래 상태가 `Listening on 192.168.0.12:9090 · HTTP+HTTPS`로 바뀌어야 합니다.
    - LAN 토글을 Record 중에 바꿨다면 Stop 후 다시 Record 해야 반영됩니다.
-5. macOS 방화벽이 켜져 있으면 처음 수신 시 "ProxyBoy가 들어오는 연결을 허용할까요?"를 물어봅니다. **허용**합니다.
+5. macOS 방화벽이 켜져 있으면 처음 수신 시 "Hachidori가 들어오는 연결을 허용할까요?"를 물어봅니다. **허용**합니다.
 
 ## 2. 기기 쪽 준비 (기기당 한 번)
 
@@ -32,7 +32,7 @@ swift run ProxyBoy
 - **iOS**: 설정 > Wi-Fi > 접속 중인 망의 ⓘ > HTTP 프록시 > **수동** > 서버 `Mac IP`, 포트 `9090`.
 - **Android**: 설정 > Wi-Fi > 망 길게 누르기(또는 ⚙) > 수정 > 고급 > 프록시 **수동** > 호스트 `Mac IP`, 포트 `9090`.
 
-이 시점부터 기기의 브라우저·앱 트래픽이 ProxyBoy 리스트에 나타나기 시작합니다. HTTPS는 아직
+이 시점부터 기기의 브라우저·앱 트래픽이 Hachidori 리스트에 나타나기 시작합니다. HTTPS는 아직
 인증서 오류가 나므로 다음 단계가 필요합니다.
 
 ### 2-2. Root CA 설치 (HTTPS 복호화용)
@@ -44,13 +44,13 @@ swift run ProxyBoy
 http://192.168.120.xx:9090      ← Certificate 팝오버에 표시된 Mac IP:포트
 ```
 
-ProxyBoy 설치 페이지가 뜨면 프록시 연결이 된 것입니다. (`http://proxyboy.local`도 되지만 iOS가 `.local`을
+Hachidori 설치 페이지가 뜨면 프록시 연결이 된 것입니다. (`http://hachidori.local`도 되지만 iOS가 `.local`을
 프록시 없이 직접 찾으려 해서 안 열리는 경우가 있어 IP 접속을 권장합니다.)
 
 - **iOS**
   1. "iOS profile (.mobileconfig)"를 눌러 프로파일을 내려받습니다.
   2. 설정 > 일반 > VPN 및 기기 관리 > 다운로드된 프로파일 > **설치**.
-  3. **설정 > 일반 > 정보 > 인증서 신뢰 설정**에서 ProxyBoy Root CA를 **켭니다.**
+  3. **설정 > 일반 > 정보 > 인증서 신뢰 설정**에서 Hachidori Root CA를 **켭니다.**
      이 단계를 빠뜨리면 WKWebView와 URLSession 모두 HTTPS를 거부합니다.
 - **Android**
   1. "Android / other (.crt)"를 눌러 내려받습니다.
@@ -74,9 +74,11 @@ ProxyBoy 설치 페이지가 뜨면 프록시 연결이 된 것입니다. (`http
 
      `debug-overrides`는 debuggable 빌드에서만 적용되므로 운영 빌드에는 영향이 없습니다.
 
+> 이름 변경 전(ProxyBoy 시절)에 CA를 설치한 기기는 인증서 이름이 **ProxyBoy Root CA**로 보입니다. 같은 인증서이므로 다시 설치할 필요는 없습니다.
+
 ### 2-3. 확인
 
-기기에서 테스트할 앱을 열고 아무 화면이나 들어갑니다. ProxyBoy 리스트에 `api.…` 같은 자체 API 호스트와
+기기에서 테스트할 앱을 열고 아무 화면이나 들어갑니다. Hachidori 리스트에 `api.…` 같은 자체 API 호스트와
 WebView 페이지 호스트가 자물쇠 아이콘(HTTPS)과 함께 나타나고, 상태가 `200`이면 준비 완료입니다.
 
 - `ERR`나 `CONNECT` 실패가 보이면 CA 신뢰가 안 된 것입니다(2-2 다시 확인).
@@ -112,7 +114,7 @@ WebView 페이지 호스트가 자물쇠 아이콘(HTTPS)과 함께 나타나고
   `/v1/members/me`처럼 경로를 넣으면 됩니다. 비워 두면 모든 요청에 걸리므로 반드시 좁히세요.
 - **Method**: 비우면 모든 메서드.
 - 규칙이 여러 개면 **위에서부터 첫 번째로 맞는 규칙 하나만** 적용됩니다. 넓은 규칙은 아래에 두세요.
-- 규칙은 **ProxyBoy를 종료하면 사라집니다**(영속화는 Phase 5 예정). 자주 쓰는 본문은 파일로 따로 보관하세요.
+- 규칙은 **Hachidori를 종료하면 사라집니다**(영속화는 Phase 5 예정). 자주 쓰는 본문은 파일로 따로 보관하세요.
 - 규칙 변경은 Record 중에도 즉시 반영됩니다. 앱에서 화면을 다시 당기거나(Pull to refresh) 재진입하면 됩니다.
 
 ### 4-2. 자체 API 조작 예시
@@ -157,7 +159,7 @@ Rewrite는 본문을 **통째로** 교체합니다. 실제 응답에서 한두 �
 
 **(e) 느린 서버·타임아웃**
 
-ProxyBoy에는 지연(throttling) 기능이 아직 없습니다. 대신 **Breakpoints > Pause responses**를 켜고
+Hachidori에는 지연(throttling) 기능이 아직 없습니다. 대신 **Breakpoints > Pause responses**를 켜고
 URL을 지정하면 응답이 멈춘 채로 대기하므로, 원하는 시간만큼 기다렸다가 **Send Original**을 누르거나
 **Abort**로 연결을 끊어 타임아웃·네트워크 오류 분기를 테스트할 수 있습니다.
 
@@ -177,7 +179,7 @@ WebView 트래픽은 Type=HTML(페이지), JS, CSS, JSON(페이지 내부 fetch/
   ```
 
 → JS 브리지·딥링크·뒤로가기 처리 등 네이티브 ↔ WebView 연동을 임의의 페이지로 검증할 수 있습니다.
-압축된 원본(gzip/br)이라도 ProxyBoy가 `Content-Encoding`을 자동으로 정리하므로 그대로 교체하면 됩니다.
+압축된 원본(gzip/br)이라도 Hachidori가 `Content-Encoding`을 자동으로 정리하므로 그대로 교체하면 됩니다.
 
 **(b) 페이지 안에서 호출하는 API만 조작**
 
@@ -205,7 +207,7 @@ console.log = (function (orig) { return function () { orig.apply(console, argume
 
 1. 툴바 **Breakpoints** > **Pause responses (before client)** 켜기 > URL contains에 경로 입력.
    (비워 두면 모든 응답이 멈춰서 앱이 먹통처럼 보이니 반드시 좁히세요.)
-2. 앱에서 해당 화면 진입 → ProxyBoy에 편집 시트가 뜹니다. 압축 응답도 **풀린 평문**으로 보입니다.
+2. 앱에서 해당 화면 진입 → Hachidori에 편집 시트가 뜹니다. 압축 응답도 **풀린 평문**으로 보입니다.
 3. 상태코드·헤더·본문을 고치고 **Send Edited**, 그대로 보내려면 **Send Original**, 끊으려면 **Abort**.
 4. **Pause requests (before server)**를 켜면 앱이 서버로 보내는 요청의 메서드·헤더·바디를 먼저 고칠 수 있습니다.
    예: `Authorization` 헤더를 지워 보내 인증 실패 경로 확인, 요청 파라미터를 바꿔 서버 검증 확인.
@@ -238,9 +240,9 @@ console.log = (function (orig) { return function () { orig.apply(console, argume
 - **HTTP/3(QUIC)** 트래픽은 프록시로 오지 않지만, 프록시가 설정되면 OS가 자동으로 HTTP/1.1·2로 내려가므로 보통 문제 없습니다.
 - 규칙 본문 교체는 **전체 교체**입니다. 부분 수정은 복사 → 수정 → 붙여넣기로 하거나 Breakpoint를 쓰세요.
 - 규칙과 캡처는 **앱 종료 시 사라집니다.**
-- 테스트가 끝나면 기기 Wi-Fi 프록시를 **반드시 "끔"으로 되돌리세요.** ProxyBoy를 끄면 기기는 인터넷이 안 됩니다.
-  Mac의 시스템 프록시는 ProxyBoy가 Stop/종료 시 자동 원복합니다.
-- Root CA(`~/Library/Application Support/ProxyBoy/rootCA.pem`)는 이 Mac에서 만든 개인 키입니다. 테스트 기기에만 설치하고
+- 테스트가 끝나면 기기 Wi-Fi 프록시를 **반드시 "끔"으로 되돌리세요.** Hachidori를 끄면 기기는 인터넷이 안 됩니다.
+  Mac의 시스템 프록시는 Hachidori가 Stop/종료 시 자동 원복합니다.
+- Root CA(`~/Library/Application Support/Hachidori/rootCA.pem`)는 이 Mac에서 만든 개인 키입니다. 테스트 기기에만 설치하고
   외부에 공유하지 마세요. 테스트가 끝난 기기에서는 프로파일/CA를 삭제해도 됩니다.
 
 ## 7. 문제 해결
@@ -248,9 +250,9 @@ console.log = (function (orig) { return function () { orig.apply(console, argume
 | 증상 | 확인할 것 |
 |------|-----------|
 | 리스트에 아무것도 안 뜸 | 기기 프록시 IP/포트, Mac과 같은 Wi-Fi인지, macOS 방화벽 허용, LAN 토글 후 Record 재시작 |
-| 설치 페이지가 안 열림 | `http://`를 붙였는지, Record 중이고 상태 표시가 LAN IP인지(127.0.0.1이면 LAN 토글 후 Stop→Record), Mac 방화벽 허용, 같은 Wi-Fi인지. `proxyboy.local` 대신 `http://<Mac IP>:9090` 사용 |
+| 설치 페이지가 안 열림 | `http://`를 붙였는지, Record 중이고 상태 표시가 LAN IP인지(127.0.0.1이면 LAN 토글 후 Stop→Record), Mac 방화벽 허용, 같은 Wi-Fi인지. `hachidori.local` 대신 `http://<Mac IP>:9090` 사용 |
 | HTTPS 호스트가 `ERR` / 앱만 실패 | iOS 전체 신뢰 설정, Android debug 빌드의 network_security_config, 피닝 여부 |
 | 규칙을 켰는데 응답이 그대로 | URL contains 철자, 위쪽에 먼저 걸리는 다른 규칙, 규칙 Enabled 여부, 앱 캐시(화면 재진입) |
 | WebView가 빈 화면 | Rewrite 본문의 Content-Type이 `text/html`인지, HTML이 완전한지 |
 | 앱이 멈춘 듯함 | Breakpoint URL이 비어 모든 요청이 멈춤 → 팝오버에서 토글 끄기 또는 시트에서 Send Original |
-| Mac 인터넷이 안 됨 | ProxyBoy가 비정상 종료돼 시스템 프록시가 남은 경우: 시스템 설정 > 네트워크 > 프록시에서 HTTP/HTTPS 프록시 해제 |
+| Mac 인터넷이 안 됨 | Hachidori가 비정상 종료돼 시스템 프록시가 남은 경우: 시스템 설정 > 네트워크 > 프록시에서 HTTP/HTTPS 프록시 해제 |

@@ -1,4 +1,6 @@
-# ProxyBoy
+# Hachidori (ハチドリ)
+
+> Formerly *ProxyBoy*. The engine module is still called `ProxyCore`; the repository folder may still be named `ProxyBoy`.
 
 A native macOS HTTP/HTTPS debugging proxy — inspect requests and responses while
 developing apps and websites. Inspired by Proxyman; UI inspired by GitKraken / Fork.
@@ -13,13 +15,13 @@ developing apps and websites. Inspired by Proxyman; UI inspired by GitKraken / F
 | Layer | Module | Notes |
 |-------|--------|-------|
 | Proxy engine | `ProxyCore` | SwiftNIO-based MITM proxy, buffered HTTP forwarding + capture |
-| UI | `ProxyBoyApp` | SwiftUI `NavigationSplitView` / `Table`, native macOS components |
+| UI | `HachidoriApp` | SwiftUI `NavigationSplitView` / `Table`, native macOS components |
 
 ```
 Sources/
   ProxyCore/       ProxyServer, CertificateAuthority, WebSocket, Overrides, Breakpoints,
                    SystemProxy, Transaction (+ timing), BodyDecoding (gzip/deflate/br)
-  ProxyBoyApp/     ProxyBoyApp (@main, AppModel), ContentView (shell/sidebar),
+  HachidoriApp/     HachidoriApp (@main, AppModel), ContentView (shell/sidebar),
                    TrafficListView (filters + table), InspectorViews (tabs/headers),
                    BodyViews (pretty/raw/preview/hex + highlighter), TimingView, RulesView,
                    BreakpointViews, Format, TrafficModel
@@ -31,15 +33,15 @@ Tests/
 
 ```bash
 swift build
-swift run ProxyBoy        # launches the app
+swift run Hachidori        # launches the app
 swift test                # unit + integration tests
 ```
 
 Development flags:
 
 ```bash
-swift run ProxyBoy --record           # start recording immediately, without touching the system proxy
-swift run ProxyBoy --serve 9090       # headless proxy (no UI), logs to stderr
+swift run Hachidori --record           # start recording immediately, without touching the system proxy
+swift run Hachidori --serve 9090       # headless proxy (no UI), logs to stderr
 ```
 
 ## Try it (HTTP)
@@ -57,7 +59,7 @@ preview / hex), and a timing waterfall. For HTTPS, install and trust the Root CA
 
 ## Testing a real device
 
-Step-by-step guide (Korean) for pointing an iOS/Android build at ProxyBoy and
+Step-by-step guide (Korean) for pointing an iOS/Android build at Hachidori and
 rewriting its API / WebView responses: [docs/device-testing.md](docs/device-testing.md).
 
 ## Requirements

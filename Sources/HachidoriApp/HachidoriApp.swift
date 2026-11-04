@@ -3,28 +3,28 @@ import AppKit
 import ProxyCore
 
 @main
-enum ProxyBoyMain {
+enum HachidoriMain {
     static func main() {
         let args = CommandLine.arguments
         if let i = args.firstIndex(of: "--serve") {
             let port = (i + 1 < args.count ? Int(args[i + 1]) : nil) ?? 9090
-            ProxyBoyHeadless.run(port: port)
+            HachidoriHeadless.run(port: port)
         } else {
-            ProxyBoyApp.main()
+            HachidoriApp.main()
         }
     }
 }
 
-struct ProxyBoyApp: App {
+struct HachidoriApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
 
-    /// `ProxyBoy --record`: start the proxy immediately without touching the
+    /// `Hachidori --record`: start the proxy immediately without touching the
     /// system proxy (handy for development and UI testing).
     private static let autoRecord = CommandLine.arguments.contains("--record")
 
     var body: some Scene {
-        WindowGroup("ProxyBoy") {
+        WindowGroup("Hachidori") {
             ContentView()
                 .environment(model)
                 .frame(minWidth: 1100, minHeight: 600)
@@ -54,18 +54,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }
 
-/// Headless proxy mode (`ProxyBoy --serve [port]`) — runs the engine with no UI,
+/// Headless proxy mode (`Hachidori --serve [port]`) — runs the engine with no UI,
 /// logging captured exchanges to stderr. Useful for scripting and verification.
-enum ProxyBoyHeadless {
+enum HachidoriHeadless {
     static func run(port: Int) {
         let log: @Sendable (String) -> Void = { s in
             FileHandle.standardError.write(Data((s + "\n").utf8))
         }
 
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        let dir = base.appendingPathComponent("ProxyBoy", isDirectory: true)
-        let ca = try? CertificateAuthority.generateOrLoad(directoryURL: dir)
+        let ca = try? CertificateAuthority.generateOrLoad(directoryURL: AppPaths.supportDirectory())
         if let ca {
             log("Root CA: \(ca.rootCertificateURL.path)")
         } else {
@@ -80,7 +77,7 @@ enum ProxyBoyHeadless {
         do {
             try server.start()
             let bound = server.boundPort ?? port
-            log("ProxyBoy listening on 0.0.0.0:\(bound)")
+            log("Hachidori listening on 0.0.0.0:\(bound)")
             if let ip = NetworkInterface.primaryIPv4() {
                 log("Devices: set proxy to \(ip):\(bound), then open http://\(ip):\(bound) to install the CA")
             }
@@ -89,6 +86,24 @@ enum ProxyBoyHeadless {
             exit(1)
         }
         dispatchMain()
+    }
+}
+
+/// Where Hachidori keeps its Root CA and other state.
+enum AppPaths {
+    /// `~/Library/Application Support/Hachidori`. On first run after the rename,
+    /// the old `ProxyBoy` folder is moved here so the already-installed Root CA
+    /// keeps working on devices without reinstalling.
+    static func supportDirectory() -> URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        let dir = base.appendingPathComponent("Hachidori", isDirectory: true)
+        let legacy = base.appendingPathComponent("ProxyBoy", isDirectory: true)
+        let fm = FileManager.default
+        if !fm.fileExists(atPath: dir.path), fm.fileExists(atPath: legacy.path) {
+            try? fm.moveItem(at: legacy, to: dir)
+        }
+        return dir
     }
 }
 
@@ -168,7 +183,7 @@ final class AppModel {
     var httpsEnabled: Bool { certificateAuthority != nil }
     var caCertificateURL: URL? { certificateAuthority?.rootCertificateURL }
 
-    /// Automatically point the macOS system proxy at ProxyBoy while recording.
+    /// Automatically point the macOS system proxy at Hachidori while recording.
     var autoConfigureSystemProxy: Bool = true
     private let systemProxy = SystemProxyConfigurator()
 
@@ -221,10 +236,7 @@ final class AppModel {
     }
 
     private static func makeCertificateAuthority() -> CertificateAuthority? {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        let dir = base.appendingPathComponent("ProxyBoy", isDirectory: true)
-        return try? CertificateAuthority.generateOrLoad(directoryURL: dir)
+        try? CertificateAuthority.generateOrLoad(directoryURL: AppPaths.supportDirectory())
     }
 
     /// Reveal the Root CA certificate in Finder so the user can install & trust it.
@@ -359,7 +371,7 @@ final class AppModel {
 
 // MARK: - Development snapshot driver
 
-/// `ProxyBoy --snapshot-dir <dir>`: polls `<dir>/cmd.txt` for simple commands
+/// `Hachidori --snapshot-dir <dir>`: polls `<dir>/cmd.txt` for simple commands
 /// (`select <n>`, `tab <name>`, `mode <name>`, `group on|off`, `host <name>|all`,
 /// `search <text>`, `snap <file.png>`, `snapview cert|breakpoints <file.png>`) so the UI can be driven and rendered to
 /// PNG without screen-recording permission. Development/testing aid only.
@@ -456,5 +468,5 @@ final class DevSnapshotDriver {
 
 extension Notification.Name {
     /// Development only: ask the traffic view to present a named sheet.
-    static let devShowSheet = Notification.Name("ProxyBoy.devShowSheet")
+    static let devShowSheet = Notification.Name("Hachidori.devShowSheet")
 }

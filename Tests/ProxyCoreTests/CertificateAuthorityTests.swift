@@ -8,7 +8,7 @@ final class CertificateAuthorityTests: XCTestCase {
 
     private func makeCA() throws -> CertificateAuthority {
         let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("proxyboy-ca-tests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("hachidori-ca-tests-\(UUID().uuidString)", isDirectory: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
         return try CertificateAuthority.generateOrLoad(directoryURL: dir)
     }

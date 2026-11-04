@@ -32,7 +32,7 @@ struct TransactionListView: View {
         }
         .searchable(text: $model.searchText, placement: .toolbar, prompt: "Filter by URL, method or status")
         .toolbar { toolbarContent }
-        .navigationTitle("ProxyBoy")
+        .navigationTitle("Hachidori")
         .navigationSubtitle(model.hostFilter ?? "All Requests")
         .sheet(isPresented: $showingRules) {
             RulesView().environment(model)

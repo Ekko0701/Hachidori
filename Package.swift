@@ -2,13 +2,13 @@
 import PackageDescription
 
 let package = Package(
-    name: "ProxyBoy",
+    name: "Hachidori",
     platforms: [
         .macOS(.v14)
     ],
     products: [
         .library(name: "ProxyCore", targets: ["ProxyCore"]),
-        .executable(name: "ProxyBoy", targets: ["ProxyBoyApp"]),
+        .executable(name: "Hachidori", targets: ["HachidoriApp"]),
     ],
     dependencies: [
         // Phase 1: proxy engine
@@ -40,7 +40,7 @@ let package = Package(
             ]
         ),
         .executableTarget(
-            name: "ProxyBoyApp",
+            name: "HachidoriApp",
             dependencies: ["ProxyCore"]
         ),
         .testTarget(

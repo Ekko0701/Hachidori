@@ -133,7 +133,7 @@ struct CertificateInfoView: View {
                 .foregroundStyle(model.httpsEnabled ? .green : .orange)
 
             if model.httpsEnabled {
-                Text("To decrypt HTTPS traffic, install and trust the ProxyBoy Root CA:")
+                Text("To decrypt HTTPS traffic, install and trust the Hachidori Root CA:")
                     .font(.callout)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("1. Reveal `rootCA.pem` and double-click to add it to Keychain.")
@@ -163,7 +163,7 @@ struct CertificateInfoView: View {
 
                 Toggle("Auto-configure macOS system proxy", isOn: $model.autoConfigureSystemProxy)
                     .font(.callout)
-                Text("Points this Mac's HTTP/HTTPS proxy at ProxyBoy while recording (restored on stop/quit).")
+                Text("Points this Mac's HTTP/HTTPS proxy at Hachidori while recording (restored on stop/quit).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 

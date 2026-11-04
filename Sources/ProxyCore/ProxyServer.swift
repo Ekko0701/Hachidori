@@ -163,12 +163,13 @@ final class ProxyRequestHandler: ChannelInboundHandler, RemovableChannelHandler 
         }
 
         // Serve the Root CA to on-device browsers over plain HTTP (before trust exists).
-        // Reached either via the proxy as `http://proxyboy.local/...`, or by opening the
+        // Reached either via the proxy as `http://hachidori.local/...`, or by opening the
         // proxy's own address directly (`http://<mac-ip>:9090/`), which arrives as an
         // origin-form request — something a real proxy client never sends.
         let isOriginForm = head.uri.hasPrefix("/")
-        if let ca = self.ca, isOriginForm || Target(from: head)?.host == "proxyboy.local" {
-            let hostHeader = head.headers.first(name: "Host") ?? "proxyboy.local"
+        let portalHosts: Set<String> = ["hachidori.local", "proxyboy.local"]   // old name kept as an alias
+        if let ca = self.ca, isOriginForm || portalHosts.contains(Target(from: head)?.host ?? "") {
+            let hostHeader = head.headers.first(name: "Host") ?? "hachidori.local"
             let (portalHost, portalPort) = Target.splitHostPort(hostHeader, defaultPort: 80)
             let path = isOriginForm ? head.uri : (Target(from: head)?.path ?? "/")
             RequestForwarder.serveCAPortal(to: channel, path: path, ca: ca)
@@ -277,7 +278,7 @@ final class ProxyRequestHandler: ChannelInboundHandler, RemovableChannelHandler 
 
     private func respondUnsupportedConnect(context: ChannelHandlerContext) {
         RequestForwarder.writeErrorResponse(to: context.channel, status: .notImplemented,
-                                            message: "ProxyBoy: HTTPS interception is disabled.")
+                                            message: "Hachidori: HTTPS interception is disabled.")
     }
 }
 
@@ -335,7 +336,7 @@ final class MITMHandler: ChannelInboundHandler, RemovableChannelHandler {
             let hint: String
             if detail.lowercased().contains("certificate") || detail.lowercased().contains("unknown ca")
                 || detail.lowercased().contains("alert") {
-                hint = "Client rejected the ProxyBoy certificate — is the Root CA installed and fully trusted on the device, or does the app pin certificates?"
+                hint = "Client rejected the Hachidori certificate — is the Root CA installed and fully trusted on the device, or does the app pin certificates?"
             } else {
                 hint = "TLS handshake with client failed."
             }
@@ -659,7 +660,7 @@ enum RequestForwarder {
         channel.writeAndFlush(HTTPServerResponsePart.end(nil), promise: nil)
     }
 
-    /// Landing portal for on-device CA install (`http://proxyboy.local` via the proxy,
+    /// Landing portal for on-device CA install (`http://hachidori.local` via the proxy,
     /// or `http://<mac-ip>:<port>/` directly). Links are relative so both work.
     /// Routes by path: `.mobileconfig` (iOS profile), `.crt` (DER), else an HTML index.
     static func serveCAPortal(to channel: Channel, path: String, ca: CertificateAuthority) {
@@ -667,11 +668,11 @@ enum RequestForwarder {
         if route.contains("mobileconfig") {
             writeBody(to: channel, data: ca.mobileConfigData(),
                       contentType: "application/x-apple-aspen-config",
-                      filename: "ProxyBoy.mobileconfig")
+                      filename: "Hachidori.mobileconfig")
         } else if route.contains(".crt") || route.contains(".cer") || route.contains(".pem") {
             writeBody(to: channel, data: ca.rootCertificateDER,
                       contentType: "application/x-x509-ca-cert",
-                      filename: "ProxyBoyCA.crt")
+                      filename: "HachidoriCA.crt")
         } else {
             writeBody(to: channel, data: Data(caPortalHTML.utf8),
                       contentType: "text/html; charset=utf-8", filename: nil)
@@ -680,11 +681,11 @@ enum RequestForwarder {
 
     private static let caPortalHTML = """
     <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>ProxyBoy CA</title></head>
+    <title>Hachidori CA</title></head>
     <body style="font-family:-apple-system,system-ui,sans-serif;max-width:32rem;margin:2rem auto;padding:0 1rem">
-    <h2>Install ProxyBoy Root CA</h2>
+    <h2>Install Hachidori Root CA</h2>
     <p>Install the certificate, then <b>trust</b> it, to decrypt HTTPS traffic.</p>
-    <p><a href="/proxyboy.mobileconfig" style="font-size:1.1rem">📱 iOS profile (.mobileconfig)</a><br>
+    <p><a href="/hachidori.mobileconfig" style="font-size:1.1rem">📱 iOS profile (.mobileconfig)</a><br>
     <small>After install: Settings → General → About → Certificate Trust Settings → enable full trust.</small></p>
     <p><a href="/ca.crt" style="font-size:1.1rem">🤖 Android / other (.crt)</a><br>
     <small>Install as a CA certificate in system settings.</small></p>

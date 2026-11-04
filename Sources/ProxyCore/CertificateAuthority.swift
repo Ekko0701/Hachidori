@@ -30,11 +30,12 @@ public final class CertificateAuthority: @unchecked Sendable {
 
     private init(certificate: Certificate,
                  privateKey: Certificate.PrivateKey,
-                 name: DistinguishedName,
                  certificateURL: URL) throws {
         self.caCertificate = certificate
         self.caPrivateKey = privateKey
-        self.caName = name
+        // Leaves must name the CA exactly as its certificate does, so take the
+        // issuer name from the loaded certificate (which may predate a rename).
+        self.caName = certificate.subject
         self.rootCertificateURL = certificateURL
         self.rootCertificatePEM = try certificate.serializeAsPEM().pemString
         let nioCert = try NIOSSLCertificate(bytes: Array(rootCertificatePEM.utf8), format: .pem)
@@ -64,7 +65,6 @@ public final class CertificateAuthority: @unchecked Sendable {
            let p256 = try? P256.Signing.PrivateKey(pemRepresentation: keyPEM) {
             return try CertificateAuthority(certificate: certificate,
                                             privateKey: Certificate.PrivateKey(p256),
-                                            name: name,
                                             certificateURL: certURL)
         }
 
@@ -94,14 +94,13 @@ public final class CertificateAuthority: @unchecked Sendable {
 
         return try CertificateAuthority(certificate: certificate,
                                         privateKey: privateKey,
-                                        name: name,
                                         certificateURL: certURL)
     }
 
     private static func rootName() throws -> DistinguishedName {
         try DistinguishedName {
-            CommonName("ProxyBoy Root CA")
-            OrganizationName("ProxyBoy")
+            CommonName("Hachidori Root CA")
+            OrganizationName("Hachidori")
         }
     }
 
@@ -191,20 +190,20 @@ public final class CertificateAuthority: @unchecked Sendable {
                 <dict>
                     <key>PayloadType</key><string>com.apple.security.root</string>
                     <key>PayloadVersion</key><integer>1</integer>
-                    <key>PayloadIdentifier</key><string>io.proxyboy.ca.\(certUUID)</string>
+                    <key>PayloadIdentifier</key><string>io.hachidori.ca.\(certUUID)</string>
                     <key>PayloadUUID</key><string>\(certUUID)</string>
-                    <key>PayloadDisplayName</key><string>ProxyBoy Root CA</string>
-                    <key>PayloadCertificateFileName</key><string>ProxyBoyCA.cer</string>
+                    <key>PayloadDisplayName</key><string>Hachidori Root CA</string>
+                    <key>PayloadCertificateFileName</key><string>HachidoriCA.cer</string>
                     <key>PayloadContent</key>
                     <data>\(certBase64)</data>
                 </dict>
             </array>
             <key>PayloadType</key><string>Configuration</string>
             <key>PayloadVersion</key><integer>1</integer>
-            <key>PayloadIdentifier</key><string>io.proxyboy.profile.\(profileUUID)</string>
+            <key>PayloadIdentifier</key><string>io.hachidori.profile.\(profileUUID)</string>
             <key>PayloadUUID</key><string>\(profileUUID)</string>
-            <key>PayloadDisplayName</key><string>ProxyBoy CA</string>
-            <key>PayloadDescription</key><string>Installs the ProxyBoy Root CA for HTTPS debugging.</string>
+            <key>PayloadDisplayName</key><string>Hachidori CA</string>
+            <key>PayloadDescription</key><string>Installs the Hachidori Root CA for HTTPS debugging.</string>
         </dict>
         </plist>
         """
