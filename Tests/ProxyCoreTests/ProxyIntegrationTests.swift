@@ -279,6 +279,30 @@ final class ProxyIntegrationTests: XCTestCase {
             .wait()
     }
 
+    func testCapturesRecordTheClientAddress() throws {
+        let group = MultiThreadedEventLoopGroup(numberOfThreads: 2)
+        defer { try? group.syncShutdownGracefully() }
+        let origin = try startOrigin(group: group)
+        defer { try? origin.close().wait() }
+        let originPort = try XCTUnwrap(origin.localAddress?.port)
+
+        let box = CaptureBox()
+        let proxy = ProxyServer(port: 0) { box.append($0) }
+        try proxy.start()
+        defer { proxy.stop() }
+        let proxyPort = try XCTUnwrap(proxy.boundPort)
+
+        _ = try fetchThroughProxy(proxyPort: proxyPort,
+                                  absoluteURL: "http://127.0.0.1:\(originPort)/hello",
+                                  host: "127.0.0.1:\(originPort)", group: group)
+        let deadline = Date().addingTimeInterval(2)
+        while box.all().isEmpty && Date() < deadline { Thread.sleep(forTimeInterval: 0.05) }
+
+        let tx = try XCTUnwrap(box.all().first)
+        XCTAssertEqual(tx.clientAddress, "127.0.0.1")
+        XCTAssertTrue(ClientDevice.isLocal(tx.clientAddress))
+    }
+
     // MARK: HTTPS tunnels
 
     func testIdleTunnelClosedAfterHandshakeIsNotReportedAsError() throws {

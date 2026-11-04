@@ -100,6 +100,10 @@ public struct CapturedTransaction: Sendable, Identifiable {
     /// Phase timestamps (connect / first byte / completion).
     public var timing: TransactionTiming
 
+    /// IP address of the client that sent this request (nil when unknown).
+    /// `127.0.0.1` is this Mac; anything else is a remote device on the LAN.
+    public var clientAddress: String?
+
     public init(
         id: UUID = UUID(),
         startedAt: Date = Date(),
@@ -118,7 +122,8 @@ public struct CapturedTransaction: Sendable, Identifiable {
         isWebSocket: Bool = false,
         webSocketMessages: [WebSocketMessage] = [],
         wasOverridden: Bool = false,
-        timing: TransactionTiming = TransactionTiming()
+        timing: TransactionTiming = TransactionTiming(),
+        clientAddress: String? = nil
     ) {
         self.id = id
         self.startedAt = startedAt
@@ -138,6 +143,7 @@ public struct CapturedTransaction: Sendable, Identifiable {
         self.webSocketMessages = webSocketMessages
         self.wasOverridden = wasOverridden
         self.timing = timing
+        self.clientAddress = clientAddress
     }
 }
 

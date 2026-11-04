@@ -9,6 +9,16 @@ struct TransactionListView: View {
     @State private var showingRules = false
     @State private var showingBreakpoints = false
 
+    private var subtitle: String {
+        let device = model.clientFilter.map { ClientDevice.isLocal($0) ? "This Mac" : $0 }
+        switch (device, model.hostFilter) {
+        case (nil, nil): return "All Requests"
+        case (nil, let host?): return host
+        case (let device?, nil): return device
+        case (let device?, let host?): return "\(device) · \(host)"
+        }
+    }
+
     var body: some View {
         @Bindable var model = model
         VStack(spacing: 0) {
@@ -33,7 +43,7 @@ struct TransactionListView: View {
         .searchable(text: $model.searchText, placement: .toolbar, prompt: "Filter by URL, method or status")
         .toolbar { toolbarContent }
         .navigationTitle("Hachidori")
-        .navigationSubtitle(model.hostFilter ?? "All Requests")
+        .navigationSubtitle(subtitle)
         .sheet(isPresented: $showingRules) {
             RulesView().environment(model)
         }
@@ -227,6 +237,16 @@ struct TrafficTable: View {
             }
             .width(min: 90, ideal: 130)
 
+            TableColumn("Client") { row in
+                if let tx = row.transaction {
+                    Text(ClientDevice.isLocal(tx.clientAddress) ? "This Mac" : (tx.clientAddress ?? "—"))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .width(min: 60, ideal: 100, max: 150)
+
             TableColumn("Path") { row in
                 if let tx = row.transaction {
                     HStack(spacing: 4) {
@@ -316,6 +336,9 @@ struct TrafficTable: View {
                 .disabled(tx.responseBody.isEmpty)
                 Divider()
                 Button("Show Only \(tx.host)") { model.hostFilter = tx.host }
+                if let client = tx.clientAddress, !ClientDevice.isLocal(client) {
+                    Button("Show Only Device \(client)") { model.clientFilter = client }
+                }
             } else if let host = ids.first.flatMap(hostName(for:)) {
                 Button("Show Only \(host)") { model.hostFilter = host }
             }

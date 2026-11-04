@@ -22,6 +22,8 @@ struct HachidoriApp: App {
     /// `Hachidori --record`: start the proxy immediately without touching the
     /// system proxy (handy for development and UI testing).
     private static let autoRecord = CommandLine.arguments.contains("--record")
+    /// `Hachidori --lan`: with `--record`, also accept LAN devices (bind 0.0.0.0).
+    private static let autoLAN = CommandLine.arguments.contains("--lan")
 
     var body: some Scene {
         WindowGroup("Hachidori") {
@@ -31,6 +33,7 @@ struct HachidoriApp: App {
                 .onAppear {
                     if Self.autoRecord && !model.isRecording {
                         model.autoConfigureSystemProxy = false
+                        model.allowLANDevices = Self.autoLAN
                         model.startRecording()
                     }
                     DevSnapshotDriver.startIfRequested(model: model)
@@ -133,6 +136,7 @@ final class AppModel {
     var selection: CapturedTransaction.ID?
     var searchText: String = ""
     var hostFilter: String? = nil          // nil = all hosts
+    var clientFilter: String? = nil        // nil = all devices; else a client IP address
     var methodFilter: String? = nil        // nil = all methods
     var statusFilter: StatusFilter = .all
     var contentFilter: ContentCategory? = nil
@@ -311,14 +315,52 @@ final class AppModel {
         var id: String { host }
     }
 
-    var hostsWithCounts: [HostSummary] {
-        Dictionary(grouping: transactions, by: { $0.host })
+    var hostsWithCounts: [HostSummary] { AppModel.hostSummaries(of: transactions) }
+
+    private static func hostSummaries(of txs: [CapturedTransaction]) -> [HostSummary] {
+        Dictionary(grouping: txs, by: { $0.host })
             .map { host, txs in
                 HostSummary(host: host, count: txs.count,
                             failures: txs.filter { $0.isFailure || ($0.statusClass ?? 0) >= 4 }.count,
                             isSecure: txs.contains { $0.scheme == "https" })
             }
             .sorted { $0.host < $1.host }
+    }
+
+    /// One client (this Mac or a LAN device) and the hosts it talked to.
+    struct DeviceSummary: Identifiable {
+        let address: String
+        let isLocal: Bool
+        let kind: ClientDevice.Kind
+        let count: Int
+        let failures: Int
+        let hosts: [HostSummary]
+        var id: String { address }
+        var title: String { isLocal ? "This Mac" : address }
+        var symbolName: String { isLocal ? "laptopcomputer" : kind.symbolName }
+    }
+
+    /// Captured traffic grouped by the client that sent it; this Mac first, then by address.
+    var devicesWithCounts: [DeviceSummary] {
+        Dictionary(grouping: transactions, by: { $0.clientAddress ?? "127.0.0.1" })
+            .map { address, txs in
+                let agents = txs.compactMap { $0.headerValue("User-Agent", inResponse: false) }
+                return DeviceSummary(address: address,
+                                     isLocal: ClientDevice.isLocal(address),
+                                     kind: ClientDevice.kind(forUserAgents: agents),
+                                     count: txs.count,
+                                     failures: txs.filter { $0.isFailure || ($0.statusClass ?? 0) >= 4 }.count,
+                                     hosts: AppModel.hostSummaries(of: txs))
+            }
+            .sorted { a, b in
+                if a.isLocal != b.isLocal { return a.isLocal }
+                return a.address < b.address
+            }
+    }
+
+    /// Whether more than one client has sent traffic (when the Client column is worth showing).
+    var hasMultipleDevices: Bool {
+        Set(transactions.map { $0.clientAddress ?? "127.0.0.1" }).count > 1
     }
 
     /// Distinct HTTP methods seen so far (for the method filter menu).
@@ -331,6 +373,7 @@ final class AppModel {
     var filteredTransactions: [CapturedTransaction] {
         let needle = searchText.lowercased()
         return transactions.filter { tx in
+            if let clientFilter, (tx.clientAddress ?? "127.0.0.1") != clientFilter { return false }
             if let hostFilter, tx.host != hostFilter { return false }
             if let methodFilter, tx.method != methodFilter { return false }
             if !statusFilter.matches(tx) { return false }
@@ -364,7 +407,7 @@ final class AppModel {
 // MARK: - Development snapshot driver
 
 /// `Hachidori --snapshot-dir <dir>`: polls `<dir>/cmd.txt` for simple commands
-/// (`select <n>`, `tab <name>`, `mode <name>`, `group on|off`, `host <name>|all`,
+/// (`select <n>`, `tab <name>`, `mode <name>`, `group on|off`, `host <name>|all`, `client <ip>|all`,
 /// `search <text>`, `snap <file.png>`, `snapview cert|breakpoints <file.png>`) so the UI can be driven and rendered to
 /// PNG without screen-recording permission. Development/testing aid only.
 @MainActor
@@ -410,6 +453,7 @@ final class DevSnapshotDriver {
             case "mode": model.preferredBodyMode = BodyMode(rawValue: arg)
             case "group": model.groupByHost = (arg == "on")
             case "host": model.hostFilter = (arg == "all") ? nil : arg
+            case "client": model.clientFilter = (arg == "all") ? nil : arg
             case "search": model.searchText = arg
             case "snapview":
                 // `snapview cert|breakpoints <file.png>`: render a popover's content at its

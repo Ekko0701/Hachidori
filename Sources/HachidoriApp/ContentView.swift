@@ -41,16 +41,36 @@ struct ContentView: View {
 enum SidebarItem: Hashable {
     case all
     case host(String)
+    case device(String)
+    case deviceHost(device: String, host: String)
 }
 
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
+    /// Device groups the user collapsed (they start expanded).
+    @State private var collapsedDevices: Set<String> = []
 
     private var selection: Binding<SidebarItem?> {
         Binding(
-            get: { model.hostFilter.map(SidebarItem.host) ?? .all },
+            get: {
+                switch (model.clientFilter, model.hostFilter) {
+                case (nil, nil): return .all
+                case (nil, let host?): return .host(host)
+                case (let device?, nil): return .device(device)
+                case (let device?, let host?): return .deviceHost(device: device, host: host)
+                }
+            },
             set: { item in
-                if case .host(let host)? = item { model.hostFilter = host } else { model.hostFilter = nil }
+                switch item {
+                case .host(let host)?:
+                    model.clientFilter = nil; model.hostFilter = host
+                case .device(let device)?:
+                    model.clientFilter = device; model.hostFilter = nil
+                case .deviceHost(let device, let host)?:
+                    model.clientFilter = device; model.hostFilter = host
+                case .all?, nil:
+                    model.clientFilter = nil; model.hostFilter = nil
+                }
             })
     }
 
@@ -61,27 +81,39 @@ struct SidebarView: View {
                     .badge(model.transactions.count)
                     .tag(SidebarItem.all)
             }
+            let devices = model.devicesWithCounts
+            if !devices.isEmpty {
+                Section("Devices") {
+                    ForEach(devices) { device in
+                        DisclosureGroup(isExpanded: expansion(for: device.address)) {
+                            ForEach(device.hosts) { entry in
+                                SidebarHostRow(entry: entry)
+                                    .tag(SidebarItem.deviceHost(device: device.address, host: entry.host))
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: device.symbolName)
+                                    .foregroundStyle(.secondary)
+                                    .font(.caption)
+                                    .frame(width: 14)
+                                Text(device.title)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Spacer(minLength: 4)
+                                FailureCount(device.failures)
+                            }
+                            .badge(device.count)
+                            .help(device.isLocal ? "Traffic from this Mac" : "\(device.kind.title) at \(device.address)")
+                        }
+                        .tag(SidebarItem.device(device.address))
+                    }
+                }
+            }
             if !model.hostsWithCounts.isEmpty {
                 Section("Hosts") {
                     ForEach(model.hostsWithCounts) { entry in
-                        HStack(spacing: 6) {
-                            Image(systemName: entry.isSecure ? "lock.fill" : "globe")
-                                .foregroundStyle(entry.isSecure ? Color.green : Color.secondary)
-                                .font(.caption)
-                                .frame(width: 14)
-                            Text(entry.host)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                            Spacer(minLength: 4)
-                            if entry.failures > 0 {
-                                Text(String(entry.failures))
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.red)
-                                    .help("\(entry.failures) failed or 4xx/5xx")
-                            }
-                        }
-                        .badge(entry.count)
-                        .tag(SidebarItem.host(entry.host))
+                        SidebarHostRow(entry: entry)
+                            .tag(SidebarItem.host(entry.host))
                     }
                 }
             }
@@ -89,6 +121,47 @@ struct SidebarView: View {
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) {
             ProxyStatusBar()
+        }
+    }
+
+    private func expansion(for device: String) -> Binding<Bool> {
+        Binding(get: { !collapsedDevices.contains(device) },
+                set: { expanded in
+                    if expanded { collapsedDevices.remove(device) } else { collapsedDevices.insert(device) }
+                })
+    }
+}
+
+/// One host line: scheme icon, name, failure count and request badge.
+private struct SidebarHostRow: View {
+    let entry: AppModel.HostSummary
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: entry.isSecure ? "lock.fill" : "globe")
+                .foregroundStyle(entry.isSecure ? Color.green : Color.secondary)
+                .font(.caption)
+                .frame(width: 14)
+            Text(entry.host)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 4)
+            FailureCount(entry.failures)
+        }
+        .badge(entry.count)
+    }
+}
+
+private struct FailureCount: View {
+    let failures: Int
+    init(_ failures: Int) { self.failures = failures }
+
+    var body: some View {
+        if failures > 0 {
+            Text(String(failures))
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.red)
+                .help("\(failures) failed or 4xx/5xx")
         }
     }
 }

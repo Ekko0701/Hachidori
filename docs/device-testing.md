@@ -85,6 +85,7 @@ WebView 페이지 호스트가 자물쇠 아이콘(HTTPS)과 함께 나타나고
 ## 3. 트래픽 읽기
 
 - 왼쪽 **Hosts**에서 호스트를 누르면 그 호스트만 보입니다. API 호스트와 WebView 호스트를 번갈아 보기 편합니다.
+- 왼쪽 **Devices**는 요청을 보낸 기기별로 묶입니다(**This Mac**, 그리고 LAN 기기는 IP). 기기 한 대를 누르면 그 기기 요청만, 그 아래 호스트를 누르면 기기+호스트로 좁혀집니다. iPhone과 Android를 한 Mac에 동시에 물려도 섞이지 않습니다. 목록의 **Client** 열과 Overview의 Client 항목에도 같은 값이 보입니다.
 - 상단 필터 바: **Method / Status / Type**. 예: Type=JSON이면 API만, Type=HTML이면 WebView 페이지만.
 - 검색창에 경로 일부(`/v1/members`)나 상태코드(`401`)를 치면 즉시 걸러집니다.
 - 행을 누르면 오른쪽 인스펙터에 **Overview / Request / Response / Timing** 탭이 열립니다.

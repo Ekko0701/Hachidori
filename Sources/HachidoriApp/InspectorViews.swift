@@ -131,6 +131,7 @@ struct OverviewPane: View {
                 LabeledContent("Scheme", value: tx.scheme)
                 LabeledContent("Host", value: tx.host)
                 LabeledContent("Port", value: String(tx.port))
+                LabeledContent("Client", value: ClientDevice.isLocal(tx.clientAddress) ? "This Mac (\(tx.clientAddress ?? "127.0.0.1"))" : (tx.clientAddress ?? "Unknown"))
                 if let ct = tx.headerValue("Content-Type", inResponse: false) {
                     LabeledContent("Content-Type", value: ct)
                 }

@@ -40,6 +40,7 @@ Development flags:
 
 ```bash
 swift run Hachidori --record           # start recording immediately, without touching the system proxy
+swift run Hachidori --record --lan     # …and accept LAN devices (bind 0.0.0.0)
 swift run Hachidori --serve 9090       # headless proxy (no UI), logs to stderr
 ```
 
@@ -54,7 +55,8 @@ curl -x http://127.0.0.1:9090 http://example.com
 
 The request appears live in the list; select it to inspect headers, body (pretty / raw /
 preview / hex; legacy charsets such as EUC-KR are decoded from the declared
-charset), and a timing waterfall. For HTTPS, install and trust the Root CA from the
+charset), and a timing waterfall. The sidebar groups traffic per device (this Mac and
+each LAN client by IP), so several phones can share one proxy without mixing up. For HTTPS, install and trust the Root CA from the
 **Certificate** toolbar popover first.
 
 ## Testing a real device

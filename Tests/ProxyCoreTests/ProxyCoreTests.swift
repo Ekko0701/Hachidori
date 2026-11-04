@@ -34,4 +34,23 @@ final class ProxyCoreTests: XCTestCase {
                                                                   value: "application/json; charset=utf-8")])
         XCTAssertEqual(tx.contentTypeCategory, .json)
     }
+
+    func testClientDeviceNormalizesMappedIPv4AndDetectsLocal() {
+        XCTAssertEqual(ClientDevice.normalize("::ffff:192.168.0.4"), "192.168.0.4")
+        XCTAssertEqual(ClientDevice.normalize("192.168.0.4"), "192.168.0.4")
+        XCTAssertEqual(ClientDevice.normalize("fe80::1"), "fe80::1")
+        XCTAssertTrue(ClientDevice.isLocal("127.0.0.1"))
+        XCTAssertTrue(ClientDevice.isLocal("::1"))
+        XCTAssertTrue(ClientDevice.isLocal(nil))
+        XCTAssertFalse(ClientDevice.isLocal("192.168.0.4"))
+    }
+
+    func testClientDeviceKindFromUserAgents() {
+        XCTAssertEqual(ClientDevice.kind(forUserAgents: ["Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)"]), .iphone)
+        XCTAssertEqual(ClientDevice.kind(forUserAgents: ["Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)", "MyApp/1.0 CFNetwork/1490 Darwin/23.0"]), .ipad)
+        XCTAssertEqual(ClientDevice.kind(forUserAgents: ["okhttp/4.12.0"]), .android)
+        XCTAssertEqual(ClientDevice.kind(forUserAgents: ["Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)"]), .mac)
+        XCTAssertEqual(ClientDevice.kind(forUserAgents: ["curl/8.4.0"]), .unknown)
+        XCTAssertEqual(ClientDevice.kind(forUserAgents: [String]()), .unknown)
+    }
 }

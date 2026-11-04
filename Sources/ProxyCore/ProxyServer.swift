@@ -64,10 +64,18 @@ public final class ProxyServer: @unchecked Sendable {
             .serverChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
             .childChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
             .childChannelInitializer { channel in
+                // Every capture from this connection carries the peer's address so the
+                // UI can group traffic per device.
+                let client = channel.remoteAddress?.ipAddress.map(ClientDevice.normalize)
+                let stamped: @Sendable (CapturedTransaction) -> Void = { tx in
+                    var tx = tx
+                    tx.clientAddress = client
+                    capture(tx)
+                }
                 let encoder = HTTPResponseEncoder()
                 let decoder = ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes))
                 let proxy = ProxyRequestHandler(group: group,
-                                                onCapture: capture,
+                                                onCapture: stamped,
                                                 ca: ca,
                                                 ruleStore: ruleStore,
                                                 breakpoints: breakpoints,
