@@ -311,7 +311,7 @@ struct TrafficTable: View {
                 Button("Copy URL") { Pasteboard.copy(tx.absoluteURLString) }
                 Button("Copy as cURL") { Pasteboard.copy(CurlExporter.command(for: tx)) }
                 Button("Copy Response Body") {
-                    Pasteboard.copy(String(decoding: tx.decodedResponseBody, as: UTF8.self))
+                    Pasteboard.copy(BodyText.lossyDecode(tx.decodedResponseBody, contentType: tx.headerValue("Content-Type")))
                 }
                 .disabled(tx.responseBody.isEmpty)
                 Divider()

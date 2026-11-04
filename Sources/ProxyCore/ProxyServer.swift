@@ -613,6 +613,14 @@ enum RequestForwarder {
             if !ruleSetsEncoding {
                 head.headers.remove(name: "Content-Encoding")
             }
+            // The replacement body is UTF-8: a legacy charset inherited from the
+            // origin (e.g. euc-kr) would make the client garble it.
+            if rule.contentType.isEmpty,
+               let ct = head.headers.first(name: "Content-Type"),
+               let charset = BodyText.charsetParameter(in: ct), !BodyText.isUTF8(charset) {
+                head.headers.replaceOrAdd(name: "Content-Type",
+                                          value: BodyText.replacingCharset(in: ct, with: "utf-8"))
+            }
         }
         return CollectedResponse(head: head, body: body)
     }

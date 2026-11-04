@@ -94,6 +94,7 @@ struct BreakpointRequestEditor: View {
     @State private var method = "GET"
     @State private var headers: [HeaderKV] = []
     @State private var bodyText = ""
+    @State private var bodyIsText = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -104,7 +105,7 @@ struct BreakpointRequestEditor: View {
                 Section("Method") { TextField("Method", text: $method) }
                 Section("Headers") { HeaderRowsEditor(headers: $headers) }
                 Section("Body") {
-                    TextEditor(text: $bodyText).font(.callout.monospaced()).frame(minHeight: 140)
+                    BodyEditor(text: $bodyText, isText: bodyIsText, byteCount: request.body.count, minHeight: 140)
                 }
             }
             .formStyle(.grouped)
@@ -129,12 +130,14 @@ struct BreakpointRequestEditor: View {
     private func load() {
         method = request.method
         headers = request.headers.map { HeaderKV(name: $0.name, value: $0.value) }
-        bodyText = String(data: request.body, encoding: .utf8) ?? ""
+        let text = BodyText.decode(request.body, contentType: request.headers.contentType)
+        bodyIsText = text != nil
+        bodyText = text ?? ""
     }
     private func edited() -> EditedRequest {
-        EditedRequest(method: method,
-                      headers: headers.map { HeaderPair(name: $0.name, value: $0.value) },
-                      body: Data(bodyText.utf8))
+        var pairs = headers.map { HeaderPair(name: $0.name, value: $0.value) }
+        let body = bodyIsText ? pairs.encodeBody(bodyText, originalBody: request.body) : request.body
+        return EditedRequest(method: method, headers: pairs, body: body)
     }
 }
 
@@ -148,6 +151,7 @@ struct BreakpointResponseEditor: View {
     @State private var statusCode = 200
     @State private var headers: [HeaderKV] = []
     @State private var bodyText = ""
+    @State private var bodyIsText = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -158,7 +162,7 @@ struct BreakpointResponseEditor: View {
                 Section("Status") { TextField("Status code", value: $statusCode, format: .number) }
                 Section("Headers") { HeaderRowsEditor(headers: $headers) }
                 Section("Body") {
-                    TextEditor(text: $bodyText).font(.callout.monospaced()).frame(minHeight: 160)
+                    BodyEditor(text: $bodyText, isText: bodyIsText, byteCount: response.body.count, minHeight: 160)
                 }
             }
             .formStyle(.grouped)
@@ -183,11 +187,53 @@ struct BreakpointResponseEditor: View {
     private func load() {
         statusCode = response.statusCode
         headers = response.headers.map { HeaderKV(name: $0.name, value: $0.value) }
-        bodyText = String(data: response.body, encoding: .utf8) ?? ""
+        let text = BodyText.decode(response.body, contentType: response.headers.contentType)
+        bodyIsText = text != nil
+        bodyText = text ?? ""
     }
     private func edited() -> EditedResponse {
-        EditedResponse(statusCode: statusCode,
-                       headers: headers.map { HeaderPair(name: $0.name, value: $0.value) },
-                       body: Data(bodyText.utf8))
+        var pairs = headers.map { HeaderPair(name: $0.name, value: $0.value) }
+        let body = bodyIsText ? pairs.encodeBody(bodyText, originalBody: response.body) : response.body
+        return EditedResponse(statusCode: statusCode, headers: pairs, body: body)
+    }
+}
+
+// MARK: - Body editing helpers
+
+/// Text editor for a paused body; binary bodies are left untouched and sent as-is.
+private struct BodyEditor: View {
+    @Binding var text: String
+    let isText: Bool
+    let byteCount: Int
+    let minHeight: CGFloat
+
+    var body: some View {
+        if isText {
+            TextEditor(text: $text).font(.callout.monospaced()).frame(minHeight: minHeight)
+        } else {
+            Label("Binary body (\(Format.bytes(byteCount))) — sent unchanged.", systemImage: "doc.zipper")
+                .font(.callout).foregroundStyle(.secondary)
+        }
+    }
+}
+
+private extension Array where Element == HeaderPair {
+    var contentType: String? {
+        first { $0.name.lowercased() == "content-type" }?.value
+    }
+
+    /// Encodes `text` in the declared charset (from `Content-Type` or the original body's
+    /// `<meta charset>`). When the text no longer fits that charset it is written as UTF-8
+    /// and the `Content-Type` charset is rewritten so the client decodes it correctly.
+    mutating func encodeBody(_ text: String, originalBody: Data) -> Data {
+        let declared = BodyText.declaredCharset(contentType: contentType, body: originalBody)
+        let encoded = BodyText.encode(text, contentType: contentType, originalBody: originalBody)
+        if encoded.charset == nil, let declared, !BodyText.isUTF8(declared) {
+            if let i = firstIndex(where: { $0.name.lowercased() == "content-type" }) {
+                self[i] = HeaderPair(name: self[i].name,
+                                     value: BodyText.replacingCharset(in: self[i].value, with: "utf-8"))
+            }
+        }
+        return encoded.data
     }
 }

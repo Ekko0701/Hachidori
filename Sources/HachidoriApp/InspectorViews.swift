@@ -192,6 +192,7 @@ struct RequestPane: View {
                             decoded: tx.decodedRequestBody,
                             category: tx.requestContentCategory,
                             encoding: tx.headerValue("Content-Encoding", inResponse: false),
+                            contentType: tx.headerValue("Content-Type", inResponse: false),
                             baseURL: URL(string: tx.absoluteURLString))
             }
             .padding(12)
@@ -216,6 +217,7 @@ struct ResponsePane: View {
                             decoded: tx.decodedResponseBody,
                             category: tx.contentTypeCategory,
                             encoding: tx.responseContentEncoding,
+                            contentType: tx.headerValue("Content-Type"),
                             baseURL: URL(string: tx.absoluteURLString))
             }
             .padding(12)

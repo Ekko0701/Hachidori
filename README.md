@@ -18,7 +18,8 @@ developing apps and websites. Inspired by Proxyman; UI inspired by GitKraken / F
 ```
 Sources/
   ProxyCore/       ProxyServer, CertificateAuthority, WebSocket, Overrides, Breakpoints,
-                   SystemProxy, Transaction (+ timing), BodyDecoding (gzip/deflate/br)
+                   SystemProxy, Transaction (+ timing), BodyDecoding (gzip/deflate/br),
+                   TextEncoding (charset from Content-Type / <meta charset>)
   HachidoriApp/     HachidoriApp (@main, AppModel), ContentView (shell/sidebar),
                    TrafficListView (filters + table), InspectorViews (tabs/headers),
                    BodyViews (pretty/raw/preview/hex + highlighter), TimingView, RulesView,
@@ -52,7 +53,8 @@ curl -x http://127.0.0.1:9090 http://example.com
 ```
 
 The request appears live in the list; select it to inspect headers, body (pretty / raw /
-preview / hex), and a timing waterfall. For HTTPS, install and trust the Root CA from the
+preview / hex; legacy charsets such as EUC-KR are decoded from the declared
+charset), and a timing waterfall. For HTTPS, install and trust the Root CA from the
 **Certificate** toolbar popover first.
 
 ## Testing a real device

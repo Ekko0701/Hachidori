@@ -91,7 +91,8 @@ enum CurlExporter {
             parts.append("-H \(shellQuote("\(h.name): \(h.value)"))")
         }
         if !tx.requestBody.isEmpty {
-            if let text = String(data: tx.decodedRequestBody, encoding: .utf8) {
+            if let text = BodyText.decode(tx.decodedRequestBody,
+                                          contentType: tx.headerValue("Content-Type", inResponse: false)) {
                 parts.append("--data-raw \(shellQuote(text))")
             } else {
                 parts.append("--data-binary @<binary \(tx.requestBody.count) bytes>")

@@ -24,6 +24,7 @@ struct BodySection: View {
     let decoded: Data
     let category: ContentCategory
     let encoding: String?
+    let contentType: String?
     let baseURL: URL?
 
     @State private var mode: BodyMode = .pretty
@@ -31,7 +32,7 @@ struct BodySection: View {
     @State private var highlightKey: Int = 0
 
     private var canPreview: Bool { category == .image || category == .html }
-    private var canPretty: Bool { BodyPresentation.prettyText(decoded, category: category) != nil }
+    private var canPretty: Bool { BodyPresentation.prettyText(decoded, category: category, contentType: contentType) != nil }
     private var availableModes: [BodyMode] {
         var modes: [BodyMode] = []
         if canPretty { modes.append(.pretty) }
@@ -42,6 +43,12 @@ struct BodySection: View {
     }
     private var decodeFailed: Bool {
         encoding != nil && encoding?.lowercased() != "identity" && decoded == raw
+    }
+    /// Declared charset when it is not UTF-8, for the size label.
+    private var charsetLabel: String? {
+        guard let charset = BodyText.declaredCharset(contentType: contentType, body: decoded),
+              !BodyText.isUTF8(charset) else { return nil }
+        return charset
     }
 
     var body: some View {
@@ -77,7 +84,7 @@ struct BodySection: View {
             } else {
                 switch mode {
                 case .pretty: prettyView
-                case .raw: codeBox(Text(BodyPresentation.rawText(decoded)))
+                case .raw: codeBox(Text(BodyPresentation.rawText(decoded, contentType: contentType)))
                 case .preview: previewView
                 case .hex: codeBox(Text(HexDump.render(decoded)))
                 }
@@ -110,17 +117,20 @@ struct BodySection: View {
     }
 
     private var sizeLabel: String {
+        var label = Format.bytes(raw.count)
         if let encoding, !decodeFailed, encoding.lowercased() != "identity" {
-            return "\(Format.bytes(decoded.count)) · \(encoding) \(Format.bytes(raw.count))"
+            label = "\(Format.bytes(decoded.count)) · \(encoding) \(Format.bytes(raw.count))"
         }
-        return Format.bytes(raw.count)
+        if let charsetLabel { label += " · \(charsetLabel)" }
+        return label
     }
 
     private var copyText: String {
         switch mode {
-        case .pretty: return BodyPresentation.prettyText(decoded, category: category) ?? BodyPresentation.rawText(decoded)
+        case .pretty: return BodyPresentation.prettyText(decoded, category: category, contentType: contentType)
+            ?? BodyPresentation.rawText(decoded, contentType: contentType)
         case .hex: return HexDump.render(decoded)
-        default: return BodyPresentation.rawText(decoded)
+        default: return BodyPresentation.rawText(decoded, contentType: contentType)
         }
     }
 
@@ -128,10 +138,10 @@ struct BodySection: View {
     private var prettyView: some View {
         if let highlighted {
             codeBox(Text(highlighted))
-        } else if let plain = BodyPresentation.prettyText(decoded, category: category) {
+        } else if let plain = BodyPresentation.prettyText(decoded, category: category, contentType: contentType) {
             codeBox(Text(plain))
         } else {
-            codeBox(Text(BodyPresentation.rawText(decoded)))
+            codeBox(Text(BodyPresentation.rawText(decoded, contentType: contentType)))
         }
     }
 
@@ -156,7 +166,7 @@ struct BodySection: View {
                 Text("Image could not be decoded.").font(.callout).foregroundStyle(.secondary)
             }
         case .html:
-            HTMLPreview(html: BodyPresentation.rawText(decoded), baseURL: baseURL)
+            HTMLPreview(html: BodyPresentation.rawText(decoded, contentType: contentType), baseURL: baseURL)
                 .frame(minHeight: 320, maxHeight: 600)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.quaternary))
@@ -179,7 +189,7 @@ struct BodySection: View {
         highlighted = nil
         let key = cacheKey
         highlightKey = key
-        guard let text = BodyPresentation.prettyText(decoded, category: category),
+        guard let text = BodyPresentation.prettyText(decoded, category: category, contentType: contentType),
               text.utf8.count <= SyntaxHighlighter.maxHighlightBytes else { return }
         let cat = category
         Task.detached(priority: .userInitiated) {
@@ -239,17 +249,20 @@ struct HTMLPreview: NSViewRepresentable {
 
 enum BodyPresentation {
     /// Text suitable for the Pretty tab, or nil when the body is not textual.
-    static func prettyText(_ data: Data, category: ContentCategory) -> String? {
+    /// `contentType` supplies the charset (EUC-KR, Shift_JIS, …); UTF-8 otherwise.
+    static func prettyText(_ data: Data, category: ContentCategory, contentType: String? = nil) -> String? {
         if category == .image { return nil }
-        if category == .json || looksLikeJSON(data) {
-            if let obj = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]),
+        guard let text = BodyText.decode(data, contentType: contentType) else { return nil }
+        let utf8 = Data(text.utf8)
+        if category == .json || looksLikeJSON(utf8) {
+            if let obj = try? JSONSerialization.jsonObject(with: utf8, options: [.fragmentsAllowed]),
                let pretty = try? JSONSerialization.data(withJSONObject: obj,
                                                         options: [.prettyPrinted, .sortedKeys, .fragmentsAllowed]),
                let s = String(data: pretty, encoding: .utf8) {
                 return s
             }
         }
-        if category == .form, let text = String(data: data, encoding: .utf8) {
+        if category == .form {
             return text.split(separator: "&").map { pair -> String in
                 let parts = pair.split(separator: "=", maxSplits: 1).map(String.init)
                 let key = parts.first?.removingPercentEncoding ?? String(pair)
@@ -257,14 +270,13 @@ enum BodyPresentation {
                 return "\(key) = \(value)"
             }.joined(separator: "\n")
         }
-        guard let text = String(data: data, encoding: .utf8) else { return nil }
-        if category == .other && !looksTextual(data) { return nil }
+        if category == .other && !looksTextual(utf8) { return nil }
         return text
     }
 
-    /// Lossy UTF-8 rendering for the Raw tab.
-    static func rawText(_ data: Data) -> String {
-        String(decoding: data, as: UTF8.self)
+    /// Lossy text rendering for the Raw tab, honouring the declared charset.
+    static func rawText(_ data: Data, contentType: String? = nil) -> String {
+        BodyText.lossyDecode(data, contentType: contentType)
     }
 
     static func prettyJSONIfPossible(_ text: String) -> String {
