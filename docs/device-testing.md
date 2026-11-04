@@ -74,8 +74,6 @@ Hachidori 설치 페이지가 뜨면 프록시 연결이 된 것입니다. (`htt
 
      `debug-overrides`는 debuggable 빌드에서만 적용되므로 운영 빌드에는 영향이 없습니다.
 
-> 이름 변경 전(ProxyBoy 시절)에 CA를 설치한 기기는 인증서 이름이 **ProxyBoy Root CA**로 보입니다. 같은 인증서이므로 다시 설치할 필요는 없습니다.
-
 ### 2-3. 확인
 
 기기에서 테스트할 앱을 열고 아무 화면이나 들어갑니다. Hachidori 리스트에 `api.…` 같은 자체 API 호스트와

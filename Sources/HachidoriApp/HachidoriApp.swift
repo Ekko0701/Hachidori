@@ -91,19 +91,11 @@ enum HachidoriHeadless {
 
 /// Where Hachidori keeps its Root CA and other state.
 enum AppPaths {
-    /// `~/Library/Application Support/Hachidori`. On first run after the rename,
-    /// the old `ProxyBoy` folder is moved here so the already-installed Root CA
-    /// keeps working on devices without reinstalling.
+    /// `~/Library/Application Support/Hachidori`.
     static func supportDirectory() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        let dir = base.appendingPathComponent("Hachidori", isDirectory: true)
-        let legacy = base.appendingPathComponent("ProxyBoy", isDirectory: true)
-        let fm = FileManager.default
-        if !fm.fileExists(atPath: dir.path), fm.fileExists(atPath: legacy.path) {
-            try? fm.moveItem(at: legacy, to: dir)
-        }
-        return dir
+        return base.appendingPathComponent("Hachidori", isDirectory: true)
     }
 }
 

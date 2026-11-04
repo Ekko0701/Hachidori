@@ -167,8 +167,7 @@ final class ProxyRequestHandler: ChannelInboundHandler, RemovableChannelHandler 
         // proxy's own address directly (`http://<mac-ip>:9090/`), which arrives as an
         // origin-form request — something a real proxy client never sends.
         let isOriginForm = head.uri.hasPrefix("/")
-        let portalHosts: Set<String> = ["hachidori.local", "proxyboy.local"]   // old name kept as an alias
-        if let ca = self.ca, isOriginForm || portalHosts.contains(Target(from: head)?.host ?? "") {
+        if let ca = self.ca, isOriginForm || Target(from: head)?.host == "hachidori.local" {
             let hostHeader = head.headers.first(name: "Host") ?? "hachidori.local"
             let (portalHost, portalPort) = Target.splitHostPort(hostHeader, defaultPort: 80)
             let path = isOriginForm ? head.uri : (Target(from: head)?.path ?? "/")

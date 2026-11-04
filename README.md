@@ -1,7 +1,5 @@
 # Hachidori (ハチドリ)
 
-> Formerly *ProxyBoy*. The engine module is still called `ProxyCore`.
-
 A native macOS HTTP/HTTPS debugging proxy — inspect requests and responses while
 developing apps and websites. Inspired by Proxyman; UI inspired by GitKraken / Fork.
 
