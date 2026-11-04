@@ -1,6 +1,7 @@
 import Foundation
 import Crypto
 import X509
+import SwiftASN1
 import NIOSSL
 
 /// Generates and persists a local Root CA, then mints per-host leaf certificates
@@ -106,23 +107,24 @@ public final class CertificateAuthority: @unchecked Sendable {
 
     // MARK: - Per-host leaf certificates
 
-    /// A cached TLS server context presenting a freshly-signed leaf for `host`.
-    public func serverContext(host: String) throws -> NIOSSLContext {
-        lock.lock()
-        defer { lock.unlock() }
-        if let cached = contextCache[host] { return cached }
+    /// Leaf validity. Apple platforms reject TLS server certificates whose
+    /// NotBefore→NotAfter span exceeds 825 days (iOS 13+) and, for stricter
+    /// profiles, 398 days — so keep the whole window (including the one-day
+    /// backdate for clock skew) comfortably inside 398 days.
+    static let leafBackdate: TimeInterval = 86_400
+    static let leafLifetime: TimeInterval = 390 * 86_400
 
-        let leafP256 = P256.Signing.PrivateKey()
-        let leafKey = Certificate.PrivateKey(leafP256)
+    /// Mint a leaf certificate for `host` signed by the Root CA.
+    func makeLeafCertificate(host: String, key: Certificate.PrivateKey, now: Date = Date()) throws -> Certificate {
         let subject = try DistinguishedName { CommonName(host) }
-        let now = Date()
-
-        let leaf = try Certificate(
+        let san: GeneralName = Self.ipv4Bytes(host).map { .ipAddress(ASN1OctetString(contentBytes: $0)) }
+            ?? .dnsName(host)
+        return try Certificate(
             version: .v3,
             serialNumber: Certificate.SerialNumber(),
-            publicKey: leafKey.publicKey,
-            notValidBefore: now.addingTimeInterval(-86_400),
-            notValidAfter: now.addingTimeInterval(825 * 86_400),
+            publicKey: key.publicKey,
+            notValidBefore: now.addingTimeInterval(-Self.leafBackdate),
+            notValidAfter: now.addingTimeInterval(Self.leafLifetime),
             issuer: caName,
             subject: subject,
             signatureAlgorithm: .ecdsaWithSHA256,
@@ -130,10 +132,32 @@ public final class CertificateAuthority: @unchecked Sendable {
                 Critical(BasicConstraints.notCertificateAuthority)
                 Critical(KeyUsage(digitalSignature: true, keyEncipherment: true))
                 try ExtendedKeyUsage([.serverAuth])
-                SubjectAlternativeNames([.dnsName(host)])
+                SubjectAlternativeNames([san])
             },
             issuerPrivateKey: caPrivateKey
         )
+    }
+
+    /// Dotted-quad IPv4 → 4 bytes, or nil when `host` is a DNS name.
+    static func ipv4Bytes(_ host: String) -> ArraySlice<UInt8>? {
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4 else { return nil }
+        var bytes: [UInt8] = []
+        for part in parts {
+            guard let n = UInt8(part) else { return nil }
+            bytes.append(n)
+        }
+        return bytes[...]
+    }
+
+    /// A cached TLS server context presenting a freshly-signed leaf for `host`.
+    public func serverContext(host: String) throws -> NIOSSLContext {
+        lock.lock()
+        defer { lock.unlock() }
+        if let cached = contextCache[host] { return cached }
+
+        let leafP256 = P256.Signing.PrivateKey()
+        let leaf = try makeLeafCertificate(host: host, key: Certificate.PrivateKey(leafP256))
 
         let leafPEM = try leaf.serializeAsPEM().pemString
         let nioLeaf = try NIOSSLCertificate(bytes: Array(leafPEM.utf8), format: .pem)
