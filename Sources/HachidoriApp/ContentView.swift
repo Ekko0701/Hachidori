@@ -36,16 +36,30 @@ struct ContentView: View {
 
 // MARK: - Sidebar
 
+/// Sidebar rows. A dedicated type (rather than `String?`) so "All Requests"
+/// is a real, selectable row: SwiftUI treats a `nil` tag as "no selection".
+enum SidebarItem: Hashable {
+    case all
+    case host(String)
+}
+
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
 
+    private var selection: Binding<SidebarItem?> {
+        Binding(
+            get: { model.hostFilter.map(SidebarItem.host) ?? .all },
+            set: { item in
+                if case .host(let host)? = item { model.hostFilter = host } else { model.hostFilter = nil }
+            })
+    }
+
     var body: some View {
-        @Bindable var model = model
-        List(selection: $model.hostFilter) {
+        List(selection: selection) {
             Section("Traffic") {
                 Label("All Requests", systemImage: "square.stack.3d.up")
                     .badge(model.transactions.count)
-                    .tag(String?.none)
+                    .tag(SidebarItem.all)
             }
             if !model.hostsWithCounts.isEmpty {
                 Section("Hosts") {
@@ -67,7 +81,7 @@ struct SidebarView: View {
                             }
                         }
                         .badge(entry.count)
-                        .tag(String?.some(entry.host))
+                        .tag(SidebarItem.host(entry.host))
                     }
                 }
             }
