@@ -24,6 +24,13 @@ struct HachidoriApp: App {
     private static let autoRecord = CommandLine.arguments.contains("--record")
     /// `Hachidori --lan`: with `--record`, also accept LAN devices (bind 0.0.0.0).
     private static let autoLAN = CommandLine.arguments.contains("--lan")
+    /// `Hachidori --port <n>`: with `--record`, listen on another port (so a
+    /// second instance can run beside one already using 9090).
+    private static let devPort: Int? = {
+        let args = CommandLine.arguments
+        guard let i = args.firstIndex(of: "--port"), i + 1 < args.count else { return nil }
+        return Int(args[i + 1])
+    }()
 
     var body: some Scene {
         WindowGroup("Hachidori") {
@@ -34,6 +41,7 @@ struct HachidoriApp: App {
                     if Self.autoRecord && !model.isRecording {
                         model.autoConfigureSystemProxy = false
                         model.allowLANDevices = Self.autoLAN
+                        if let port = Self.devPort { model.listenPort = port }
                         model.startRecording()
                     }
                     DevSnapshotDriver.startIfRequested(model: model)
@@ -308,19 +316,25 @@ final class AppModel {
     // MARK: derived
 
     struct HostSummary: Identifiable {
+        /// Unique within the sidebar: the same host appears under every device
+        /// that talked to it *and* in the Hosts section, and `List` draws rows
+        /// with colliding identities on top of each other.
+        let id: String
         let host: String
         let count: Int
         let failures: Int
         let isSecure: Bool
-        var id: String { host }
     }
 
     var hostsWithCounts: [HostSummary] { AppModel.hostSummaries(of: transactions) }
 
-    private static func hostSummaries(of txs: [CapturedTransaction]) -> [HostSummary] {
+    /// Hosts in `txs` with their counts; `scope` namespaces the row identities
+    /// (the device address when listing one device's hosts).
+    private static func hostSummaries(of txs: [CapturedTransaction], scope: String? = nil) -> [HostSummary] {
         Dictionary(grouping: txs, by: { $0.host })
             .map { host, txs in
-                HostSummary(host: host, count: txs.count,
+                HostSummary(id: scope.map { "\($0)/\(host)" } ?? host,
+                            host: host, count: txs.count,
                             failures: txs.filter { $0.isFailure || ($0.statusClass ?? 0) >= 4 }.count,
                             isSecure: txs.contains { $0.scheme == "https" })
             }
@@ -350,7 +364,7 @@ final class AppModel {
                                      kind: ClientDevice.kind(forUserAgents: agents),
                                      count: txs.count,
                                      failures: txs.filter { $0.isFailure || ($0.statusClass ?? 0) >= 4 }.count,
-                                     hosts: AppModel.hostSummaries(of: txs))
+                                     hosts: AppModel.hostSummaries(of: txs, scope: address))
             }
             .sorted { a, b in
                 if a.isLocal != b.isLocal { return a.isLocal }

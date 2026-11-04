@@ -41,6 +41,7 @@ Development flags:
 ```bash
 swift run Hachidori --record           # start recording immediately, without touching the system proxy
 swift run Hachidori --record --lan     # …and accept LAN devices (bind 0.0.0.0)
+swift run Hachidori --record --port 9091   # …on another port (beside an instance already on 9090)
 swift run Hachidori --serve 9090       # headless proxy (no UI), logs to stderr
 ```
 
