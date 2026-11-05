@@ -152,7 +152,25 @@ final class AppModel {
     /// Hide failed CONNECT tunnels (devices that do not trust the CA retry them
     /// endlessly and bury real traffic). Remembered across launches.
     var hideConnectErrors: Bool = UserDefaults.standard.bool(forKey: "hideConnectErrors") {
-        didSet { UserDefaults.standard.set(hideConnectErrors, forKey: "hideConnectErrors") }
+        didSet {
+            UserDefaults.standard.set(hideConnectErrors, forKey: "hideConnectErrors")
+            pruneSidebarSelection()
+        }
+    }
+
+    /// Clears a host / device filter whose rows just disappeared (e.g. a host that
+    /// only ever failed CONNECT, once those are hidden) so the sidebar never points
+    /// at nothing and the list does not show an empty "no matches" state.
+    private func pruneSidebarSelection() {
+        let visible = visibleTransactions
+        if let client = clientFilter,
+           !visible.contains(where: { ($0.clientAddress ?? "127.0.0.1") == client }) {
+            clientFilter = nil
+        }
+        if let host = hostFilter,
+           !visible.contains(where: { $0.host == host && (clientFilter == nil || ($0.clientAddress ?? "127.0.0.1") == clientFilter) }) {
+            hostFilter = nil
+        }
     }
     /// Hosts whose group row is collapsed (grouped mode). Groups start expanded.
     var collapsedHosts: Set<String> = []

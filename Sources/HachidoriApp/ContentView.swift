@@ -83,29 +83,20 @@ struct SidebarView: View {
             }
             let devices = model.devicesWithCounts
             if !devices.isEmpty {
+                // Devices and their hosts are flat rows rather than a DisclosureGroup:
+                // the outline view behind DisclosureGroup leaves stale child rows
+                // drawn over new ones when the host list changes under it.
                 Section("Devices") {
                     ForEach(devices) { device in
-                        DisclosureGroup(isExpanded: expansion(for: device.address)) {
+                        SidebarDeviceRow(device: device, isExpanded: expansion(for: device.address))
+                            .tag(SidebarItem.device(device.address))
+                        if !collapsedDevices.contains(device.address) {
                             ForEach(device.hosts) { entry in
                                 SidebarHostRow(entry: entry)
+                                    .padding(.leading, 18)
                                     .tag(SidebarItem.deviceHost(device: device.address, host: entry.host))
                             }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: device.symbolName)
-                                    .foregroundStyle(.secondary)
-                                    .font(.caption)
-                                    .frame(width: 14)
-                                Text(device.title)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                                Spacer(minLength: 4)
-                                FailureCount(device.failures)
-                            }
-                            .badge(device.count)
-                            .help(device.isLocal ? "Traffic from this Mac" : "\(device.kind.title) at \(device.address)")
                         }
-                        .tag(SidebarItem.device(device.address))
                     }
                 }
             }
@@ -129,6 +120,39 @@ struct SidebarView: View {
                 set: { expanded in
                     if expanded { collapsedDevices.remove(device) } else { collapsedDevices.insert(device) }
                 })
+    }
+}
+
+/// One device line: disclosure chevron, device icon, name, failure count and badge.
+private struct SidebarDeviceRow: View {
+    let device: AppModel.DeviceSummary
+    @Binding var isExpanded: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(isExpanded ? .degrees(90) : .zero)
+                    .frame(width: 10)
+            }
+            .buttonStyle(.plain)
+            .help(isExpanded ? "Collapse" : "Expand")
+            Image(systemName: device.symbolName)
+                .foregroundStyle(.secondary)
+                .font(.caption)
+                .frame(width: 14)
+            Text(device.title)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 4)
+            FailureCount(device.failures)
+        }
+        .badge(device.count)
+        .help(device.isLocal ? "Traffic from this Mac" : "\(device.kind.title) at \(device.address)")
     }
 }
 
