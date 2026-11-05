@@ -149,6 +149,11 @@ final class AppModel {
     var statusFilter: StatusFilter = .all
     var contentFilter: ContentCategory? = nil
     var groupByHost: Bool = false
+    /// Hide failed CONNECT tunnels (devices that do not trust the CA retry them
+    /// endlessly and bury real traffic). Remembered across launches.
+    var hideConnectErrors: Bool = UserDefaults.standard.bool(forKey: "hideConnectErrors") {
+        didSet { UserDefaults.standard.set(hideConnectErrors, forKey: "hideConnectErrors") }
+    }
     /// Hosts whose group row is collapsed (grouped mode). Groups start expanded.
     var collapsedHosts: Set<String> = []
 
@@ -326,7 +331,17 @@ final class AppModel {
         let isSecure: Bool
     }
 
-    var hostsWithCounts: [HostSummary] { AppModel.hostSummaries(of: transactions) }
+    /// Everything captured, minus the rows the user chose to hide. The sidebar,
+    /// counts and the table all derive from this, so a hidden row is hidden everywhere.
+    var visibleTransactions: [CapturedTransaction] {
+        hideConnectErrors ? transactions.filter { !$0.isConnectError } : transactions
+    }
+    /// How many CONNECT errors the hide toggle is currently suppressing.
+    var hiddenConnectErrorCount: Int {
+        hideConnectErrors ? transactions.filter(\.isConnectError).count : 0
+    }
+
+    var hostsWithCounts: [HostSummary] { AppModel.hostSummaries(of: visibleTransactions) }
 
     /// Hosts in `txs` with their counts; `scope` namespaces the row identities
     /// (the device address when listing one device's hosts).
@@ -356,7 +371,7 @@ final class AppModel {
 
     /// Captured traffic grouped by the client that sent it; this Mac first, then by address.
     var devicesWithCounts: [DeviceSummary] {
-        Dictionary(grouping: transactions, by: { $0.clientAddress ?? "127.0.0.1" })
+        Dictionary(grouping: visibleTransactions, by: { $0.clientAddress ?? "127.0.0.1" })
             .map { address, txs in
                 let agents = txs.compactMap { $0.headerValue("User-Agent", inResponse: false) }
                 return DeviceSummary(address: address,
@@ -374,19 +389,19 @@ final class AppModel {
 
     /// Whether more than one client has sent traffic (when the Client column is worth showing).
     var hasMultipleDevices: Bool {
-        Set(transactions.map { $0.clientAddress ?? "127.0.0.1" }).count > 1
+        Set(visibleTransactions.map { $0.clientAddress ?? "127.0.0.1" }).count > 1
     }
 
     /// Distinct HTTP methods seen so far (for the method filter menu).
     var methodsSeen: [String] {
-        Array(Set(transactions.map(\.method))).sorted()
+        Array(Set(visibleTransactions.map(\.method))).sorted()
     }
 
-    var failureCount: Int { transactions.filter { $0.isFailure }.count }
+    var failureCount: Int { visibleTransactions.filter { $0.isFailure }.count }
 
     var filteredTransactions: [CapturedTransaction] {
         let needle = searchText.lowercased()
-        return transactions.filter { tx in
+        return visibleTransactions.filter { tx in
             if let clientFilter, (tx.clientAddress ?? "127.0.0.1") != clientFilter { return false }
             if let hostFilter, tx.host != hostFilter { return false }
             if let methodFilter, tx.method != methodFilter { return false }
@@ -466,6 +481,7 @@ final class DevSnapshotDriver {
             case "tab": if let t = InspectorTab(rawValue: arg) { model.inspectorTab = t }
             case "mode": model.preferredBodyMode = BodyMode(rawValue: arg)
             case "group": model.groupByHost = (arg == "on")
+            case "hideconnect": model.hideConnectErrors = (arg == "on")
             case "host": model.hostFilter = (arg == "all") ? nil : arg
             case "client": model.clientFilter = (arg == "all") ? nil : arg
             case "search": model.searchText = arg

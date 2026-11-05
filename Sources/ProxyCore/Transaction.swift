@@ -200,6 +200,10 @@ public extension CapturedTransaction {
 
     /// Whether this exchange ended in a transport-level failure (no response).
     var isFailure: Bool { error != nil && statusCode == nil }
+
+    /// A CONNECT tunnel that failed before any request flowed through it —
+    /// typically a client that does not trust the Root CA (one row per attempt).
+    var isConnectError: Bool { method == "CONNECT" && isFailure }
 }
 
 public enum ContentCategory: String, Sendable, CaseIterable {

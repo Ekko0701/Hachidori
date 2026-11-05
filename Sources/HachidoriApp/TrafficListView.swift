@@ -27,6 +27,14 @@ struct TransactionListView: View {
             Group {
                 if model.transactions.isEmpty {
                     EmptyStateView()
+                } else if model.visibleTransactions.isEmpty {
+                    ContentUnavailableView {
+                        Label("Only CONNECT Errors Captured", systemImage: "eye.slash")
+                    } description: {
+                        Text("\(model.hiddenConnectErrorCount) failed CONNECT tunnels are hidden. A device that keeps failing CONNECT usually does not trust the Root CA yet.")
+                    } actions: {
+                        Button("Show CONNECT Errors") { model.hideConnectErrors = false }
+                    }
                 } else if model.trafficRows.isEmpty {
                     ContentUnavailableView {
                         Label("No Matching Requests", systemImage: "line.3.horizontal.decrease.circle")
@@ -39,6 +47,9 @@ struct TransactionListView: View {
                     TrafficTable()
                 }
             }
+            // Placeholder views size to their content; fill the column so the
+            // filter bar stays pinned to the top instead of centring with them.
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .searchable(text: $model.searchText, placement: .toolbar, prompt: "Filter by URL, method or status")
         .toolbar { toolbarContent }
@@ -171,6 +182,13 @@ struct FilterBar: View {
             }
 
             Spacer()
+
+            Toggle(isOn: $model.hideConnectErrors) {
+                Label("Hide CONNECT Errors", systemImage: "eye.slash")
+                    .labelStyle(.iconOnly)
+            }
+            .toggleStyle(.button)
+            .help("Hide failed CONNECT tunnels (e.g. a device that does not trust the Root CA)")
 
             Toggle(isOn: $model.groupByHost) {
                 Label("Group by Host", systemImage: "rectangle.3.group")

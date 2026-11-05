@@ -57,7 +57,9 @@ curl -x http://127.0.0.1:9090 http://example.com
 The request appears live in the list; select it to inspect headers, body (pretty / raw /
 preview / hex; legacy charsets such as EUC-KR are decoded from the declared
 charset), and a timing waterfall. The sidebar groups traffic per device (this Mac and
-each LAN client by IP), so several phones can share one proxy without mixing up. For HTTPS, install and trust the Root CA from the
+each LAN client by IP), so several phones can share one proxy without mixing up. A device
+that does not trust the CA floods the list with `CONNECT ERR` rows; the eye-slash button in the
+filter bar hides them (the status bar still counts them). For HTTPS, install and trust the Root CA from the
 **Certificate** toolbar popover first.
 
 ## Testing a real device

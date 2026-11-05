@@ -35,6 +35,17 @@ final class ProxyCoreTests: XCTestCase {
         XCTAssertEqual(tx.contentTypeCategory, .json)
     }
 
+    func testConnectErrorIsOnlyAFailedTunnel() {
+        var tx = CapturedTransaction(method: "CONNECT", scheme: "https", host: "a.example", port: 443, path: "",
+                                     error: "handshake failed")
+        XCTAssertTrue(tx.isConnectError)
+        tx.statusCode = 200; tx.error = nil
+        XCTAssertFalse(tx.isConnectError, "a tunnel that answered is not an error")
+        let get = CapturedTransaction(method: "GET", scheme: "https", host: "a.example", port: 443, path: "/",
+                                      error: "connection reset")
+        XCTAssertFalse(get.isConnectError, "ordinary failed requests stay visible")
+    }
+
     func testClientDeviceNormalizesMappedIPv4AndDetectsLocal() {
         XCTAssertEqual(ClientDevice.normalize("::ffff:192.168.0.4"), "192.168.0.4")
         XCTAssertEqual(ClientDevice.normalize("192.168.0.4"), "192.168.0.4")

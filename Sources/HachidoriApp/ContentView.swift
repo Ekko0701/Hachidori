@@ -78,7 +78,7 @@ struct SidebarView: View {
         List(selection: selection) {
             Section("Traffic") {
                 Label("All Requests", systemImage: "square.stack.3d.up")
-                    .badge(model.transactions.count)
+                    .badge(model.visibleTransactions.count)
                     .tag(SidebarItem.all)
             }
             let devices = model.devicesWithCounts
@@ -184,14 +184,18 @@ struct ProxyStatusBar: View {
             }
             if !model.transactions.isEmpty {
                 HStack(spacing: 4) {
-                    Text("\(model.transactions.count) requests")
+                    Text("\(model.visibleTransactions.count) requests")
                     if model.failureCount > 0 {
                         Text("·")
                         Text("\(model.failureCount) failed").foregroundStyle(.red)
                     }
-                    if model.filteredTransactions.count != model.transactions.count {
+                    if model.filteredTransactions.count != model.visibleTransactions.count {
                         Text("·")
                         Text("\(model.filteredTransactions.count) shown")
+                    }
+                    if model.hiddenConnectErrorCount > 0 {
+                        Text("·")
+                        Text("\(model.hiddenConnectErrorCount) CONNECT errors hidden")
                     }
                 }
                 .font(.caption2.monospacedDigit())
