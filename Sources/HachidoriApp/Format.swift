@@ -82,6 +82,8 @@ enum Format {
         case .image: return .green
         case .form: return .teal
         case .text: return .secondary
+        case .pdf: return .red
+        case .binary: return .gray
         case .other: return .secondary
         }
     }

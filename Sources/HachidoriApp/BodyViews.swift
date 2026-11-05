@@ -30,9 +30,12 @@ struct BodySection: View {
     @State private var mode: BodyMode = .pretty
     @State private var highlighted: AttributedString?
     @State private var highlightKey: Int = 0
+    /// Pretty-printed text, computed once per body: pretty-printing a large
+    /// JSON body is costly and several parts of the view need the answer.
+    @State private var pretty: String?
 
     private var canPreview: Bool { category == .image || category == .html }
-    private var canPretty: Bool { BodyPresentation.prettyText(decoded, category: category, contentType: contentType) != nil }
+    private var canPretty: Bool { pretty != nil }
     private var availableModes: [BodyMode] {
         var modes: [BodyMode] = []
         if canPretty { modes.append(.pretty) }
@@ -84,13 +87,15 @@ struct BodySection: View {
             } else {
                 switch mode {
                 case .pretty: prettyView
-                case .raw: codeBox(Text(BodyPresentation.rawText(decoded, contentType: contentType)))
+                case .raw: codeBox(Text(BodyPresentation.rawText(decoded, contentType: contentType,
+                                                                 limit: BodyPresentation.maxRawBytes)))
                 case .preview: previewView
                 case .hex: codeBox(Text(HexDump.render(decoded)))
                 }
             }
         }
         .onChange(of: cacheKey, initial: true) { _, _ in
+            pretty = BodyPresentation.prettyText(decoded, category: category, contentType: contentType)
             mode = defaultMode
             scheduleHighlight()
         }
@@ -103,6 +108,7 @@ struct BodySection: View {
     private var defaultMode: BodyMode {
         if let preferred = model.preferredBodyMode, availableModes.contains(preferred) { return preferred }
         if category == .image { return .preview }
+        if category == .pdf || category == .binary { return .hex }
         if canPretty { return .pretty }
         return BodyPresentation.looksTextual(decoded) ? .raw : .hex
     }
@@ -127,8 +133,7 @@ struct BodySection: View {
 
     private var copyText: String {
         switch mode {
-        case .pretty: return BodyPresentation.prettyText(decoded, category: category, contentType: contentType)
-            ?? BodyPresentation.rawText(decoded, contentType: contentType)
+        case .pretty: return pretty ?? BodyPresentation.rawText(decoded, contentType: contentType)
         case .hex: return HexDump.render(decoded)
         default: return BodyPresentation.rawText(decoded, contentType: contentType)
         }
@@ -138,10 +143,11 @@ struct BodySection: View {
     private var prettyView: some View {
         if let highlighted {
             codeBox(Text(highlighted))
-        } else if let plain = BodyPresentation.prettyText(decoded, category: category, contentType: contentType) {
-            codeBox(Text(plain))
+        } else if let pretty {
+            codeBox(Text(BodyPresentation.truncatedForDisplay(pretty)))
         } else {
-            codeBox(Text(BodyPresentation.rawText(decoded, contentType: contentType)))
+            codeBox(Text(BodyPresentation.rawText(decoded, contentType: contentType,
+                                                  limit: BodyPresentation.maxRawBytes)))
         }
     }
 
@@ -189,8 +195,7 @@ struct BodySection: View {
         highlighted = nil
         let key = cacheKey
         highlightKey = key
-        guard let text = BodyPresentation.prettyText(decoded, category: category, contentType: contentType),
-              text.utf8.count <= SyntaxHighlighter.maxHighlightBytes else { return }
+        guard let text = pretty, text.utf8.count <= SyntaxHighlighter.maxHighlightBytes else { return }
         let cat = category
         Task.detached(priority: .userInitiated) {
             let result = SyntaxHighlighter.highlight(text, category: cat)
@@ -251,7 +256,8 @@ enum BodyPresentation {
     /// Text suitable for the Pretty tab, or nil when the body is not textual.
     /// `contentType` supplies the charset (EUC-KR, Shift_JIS, …); UTF-8 otherwise.
     static func prettyText(_ data: Data, category: ContentCategory, contentType: String? = nil) -> String? {
-        if category == .image { return nil }
+        if category == .image || category == .pdf || category == .binary { return nil }
+        if data.count > maxPrettyBytes { return nil }
         guard let text = BodyText.decode(data, contentType: contentType) else { return nil }
         let utf8 = Data(text.utf8)
         if category == .json || looksLikeJSON(utf8) {
@@ -274,9 +280,34 @@ enum BodyPresentation {
         return text
     }
 
+    /// Bodies above this size skip pretty-printing; Raw / Hex still show them.
+    static let maxPrettyBytes = 4 * 1024 * 1024
+    /// Bytes the Raw tab lays out. A single SwiftUI `Text` with megabytes of
+    /// characters freezes the main thread, so the rest is summarised.
+    static let maxRawBytes = 64 * 1024
+
     /// Lossy text rendering for the Raw tab, honouring the declared charset.
-    static func rawText(_ data: Data, contentType: String? = nil) -> String {
-        BodyText.lossyDecode(data, contentType: contentType)
+    /// With `limit`, only the first `limit` bytes are rendered, followed by a
+    /// note of how much was left out.
+    static func rawText(_ data: Data, contentType: String? = nil, limit: Int? = nil) -> String {
+        guard let limit, data.count > limit else {
+            return BodyText.lossyDecode(data, contentType: contentType)
+        }
+        return BodyText.lossyDecode(data.prefix(limit), contentType: contentType)
+            + omissionNote(bytesLeft: data.count - limit)
+    }
+
+    /// The first `maxRawBytes` of already-decoded text, for the Pretty tab
+    /// when the body was too large to highlight.
+    static func truncatedForDisplay(_ text: String) -> String {
+        let utf8 = text.utf8
+        guard utf8.count > maxRawBytes else { return text }
+        let cut = String(decoding: utf8.prefix(maxRawBytes), as: UTF8.self)
+        return cut + omissionNote(bytesLeft: utf8.count - maxRawBytes)
+    }
+
+    private static func omissionNote(bytesLeft: Int) -> String {
+        "\n… \(Format.bytes(bytesLeft)) more not shown (Copy gives the full body)"
     }
 
     static func prettyJSONIfPossible(_ text: String) -> String {
@@ -311,7 +342,7 @@ extension UInt8 {
 
 /// Classic `xxd`-style hex dump, capped for very large bodies.
 enum HexDump {
-    static let maxBytes = 64 * 1024
+    static let maxBytes = 16 * 1024
 
     static func render(_ data: Data) -> String {
         let bytes = [UInt8](data.prefix(maxBytes))

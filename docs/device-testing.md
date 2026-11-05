@@ -91,6 +91,7 @@ WebView 페이지 호스트가 자물쇠 아이콘(HTTPS)과 함께 나타나고
 - 검색창에 경로 일부(`/v1/members`)나 상태코드(`401`)를 치면 즉시 걸러집니다.
 - 행을 누르면 오른쪽 인스펙터에 **Overview / Request / Response / Timing** 탭이 열립니다.
   Response 본문은 **Pretty**(구문 강조) / **Raw** / **Preview**(이미지·HTML 렌더) / **Hex**로 볼 수 있습니다.
+  PDF·zip 같은 바이너리 응답은 Hex로 열리고, 큰 본문은 앞부분만 표시합니다(전체는 **Copy**).
   gzip·br로 압축된 응답도 자동으로 풀어서 보여 줍니다.
 - 행 우클릭 > **Copy as cURL**로 같은 요청을 터미널에서 재현할 수 있습니다.
 

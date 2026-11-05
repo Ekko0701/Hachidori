@@ -207,11 +207,12 @@ public extension CapturedTransaction {
 }
 
 public enum ContentCategory: String, Sendable, CaseIterable {
-    case json, html, xml, javascript, css, image, form, text, other
+    case json, html, xml, javascript, css, image, form, text, pdf, binary, other
 
     public init(contentType: String?) {
         guard let ct = contentType?.lowercased() else { self = .other; return }
         if ct.contains("json") { self = .json }
+        else if ct.contains("pdf") { self = .pdf }
         else if ct.contains("html") { self = .html }
         else if ct.contains("javascript") || ct.contains("ecmascript") { self = .javascript }
         else if ct.contains("css") { self = .css }
@@ -219,7 +220,19 @@ public enum ContentCategory: String, Sendable, CaseIterable {
         else if ct.hasPrefix("image/") { self = .image }
         else if ct.contains("x-www-form-urlencoded") { self = .form }
         else if ct.hasPrefix("text/") { self = .text }
+        else if Self.isKnownBinary(ct) { self = .binary }
         else { self = .other }
+    }
+
+    /// Media types that are never text, so the inspector opens them in Hex
+    /// instead of trying to lay out megabytes of replacement characters.
+    private static func isKnownBinary(_ ct: String) -> Bool {
+        if ct.hasPrefix("audio/") || ct.hasPrefix("video/") || ct.hasPrefix("font/") { return true }
+        let binaryApplicationTypes = ["octet-stream", "zip", "gzip", "x-tar", "x-7z", "x-rar", "x-bzip", "x-xz", "zstd",
+                                      "protobuf", "grpc", "msgpack", "cbor", "wasm", "x-sqlite",
+                                      "vnd.ms-fontobject", "x-font", "font-woff", "java-archive"]
+        guard ct.hasPrefix("application/") else { return false }
+        return binaryApplicationTypes.contains { ct.contains($0) }
     }
 
     /// Short label for list columns.
@@ -233,6 +246,8 @@ public enum ContentCategory: String, Sendable, CaseIterable {
         case .image: return "IMG"
         case .form: return "FORM"
         case .text: return "TXT"
+        case .pdf: return "PDF"
+        case .binary: return "BIN"
         case .other: return ""
         }
     }
@@ -240,7 +255,7 @@ public enum ContentCategory: String, Sendable, CaseIterable {
     /// True for categories that are human-readable text.
     public var isTextual: Bool {
         switch self {
-        case .image, .other: return false
+        case .image, .pdf, .binary, .other: return false
         default: return true
         }
     }

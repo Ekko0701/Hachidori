@@ -46,6 +46,18 @@ final class ProxyCoreTests: XCTestCase {
         XCTAssertFalse(get.isConnectError, "ordinary failed requests stay visible")
     }
 
+    func testBinaryContentTypesAreNotTextual() {
+        XCTAssertEqual(ContentCategory(contentType: "application/pdf"), .pdf)
+        XCTAssertEqual(ContentCategory(contentType: "application/octet-stream"), .binary)
+        XCTAssertEqual(ContentCategory(contentType: "font/woff2"), .binary)
+        XCTAssertEqual(ContentCategory(contentType: "video/mp4"), .binary)
+        XCTAssertEqual(ContentCategory(contentType: "application/x-protobuf"), .binary)
+        XCTAssertFalse(ContentCategory.pdf.isTextual)
+        XCTAssertFalse(ContentCategory.binary.isTextual)
+        XCTAssertEqual(ContentCategory(contentType: "application/vnd.apple.mpegurl"), .other, "playlists stay text-like")
+        XCTAssertEqual(ContentCategory(contentType: "application/json; charset=utf-8"), .json)
+    }
+
     func testClientDeviceNormalizesMappedIPv4AndDetectsLocal() {
         XCTAssertEqual(ClientDevice.normalize("::ffff:192.168.0.4"), "192.168.0.4")
         XCTAssertEqual(ClientDevice.normalize("192.168.0.4"), "192.168.0.4")
