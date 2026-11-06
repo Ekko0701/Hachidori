@@ -98,3 +98,7 @@ rewriting its API / WebView responses: [docs/device-testing.md](docs/device-test
 `dist/Hachidori-<version>.dmg`, signed and notarized. Pushing a `v*` tag does the same in
 GitHub Actions and drafts a release. Setup and checklist (Korean):
 [docs/releasing.md](docs/releasing.md).
+
+## License
+
+[MIT](LICENSE) © 2026 Ekko0701

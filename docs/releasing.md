@@ -57,7 +57,7 @@ base64 -i AuthKey_XXXXXXXXXX.p8 | gh secret set NOTARY_KEY_BASE64
    git push origin v0.1.0
    ```
 
-4. Actions의 **Release** 워크플로가 끝나면 Releases에 초안이 생깁니다. 릴리스 노트를 다듬고 **Publish**를 누릅니다.
+4. Actions의 **Release** 워크플로가 끝나면 Releases에 초안이 생깁니다. 릴리스 노트를 다듬고 **Publish**를 누릅니다. `0.x` 버전은 **Pre-release**로 표시됩니다.
 
 로컬에서 직접 만들 때:
 
@@ -96,7 +96,7 @@ cask "hachidori" do
 
   zap trash: [
     "~/Library/Application Support/Hachidori",
-    "~/Library/Preferences/io.github.ekko0701.Hachidori.plist",
+    "~/Library/Preferences/com.ekko0701.hachidori.plist",
   ]
 end
 ```
@@ -109,6 +109,6 @@ brew install --cask ekko0701/tap/hachidori
 
 ## 알아둘 점
 
-- 번들 ID는 `io.github.ekko0701.Hachidori`입니다(`Packaging/Info.plist`). 바꾸면 설정 저장 위치가 바뀌므로 첫 공개 전에 확정합니다.
+- 번들 ID는 `com.ekko0701.hachidori`입니다(`Packaging/Info.plist`). 바꾸면 사용자 설정 저장 위치가 바뀌므로 공개 후에는 바꾸지 않습니다.
 - 패키징한 앱은 설정을 번들 ID 도메인에 저장합니다. `swift run`으로 띄운 개발 빌드의 설정(창 크기 등)과는 따로 저장됩니다. Root CA는 둘이 같은 `~/Library/Application Support/Hachidori`를 씁니다.
 - `--record`, `--lan`, `--port`, `--snapshot-dir` 같은 개발용 플래그는 디버그 빌드에만 들어갑니다.

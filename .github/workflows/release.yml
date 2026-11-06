@@ -58,8 +58,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          version="${GITHUB_REF_NAME#v}"
+          prerelease=()
+          [[ "$version" == 0.* ]] && prerelease=(--prerelease)   # 0.x is beta
           gh release create "$GITHUB_REF_NAME" dist/Hachidori-*.dmg dist/Hachidori-*.dmg.sha256 \
-            --title "Hachidori ${GITHUB_REF_NAME#v}" --generate-notes --draft
+            --title "Hachidori $version" --generate-notes --draft "${prerelease[@]}"
 
       - name: Remove the signing keychain
         if: always()
