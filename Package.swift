@@ -43,7 +43,15 @@ let package = Package(
         .executableTarget(
             name: "HachidoriApp",
             dependencies: ["ProxyCore"],
-            resources: [.copy("Resources/AppIcon.icns"), .copy("Resources/AppIcon-1024.png")]
+            resources: [.copy("Resources/AppIcon.icns"), .copy("Resources/AppIcon-1024.png")],
+            // SwiftPM records the deployment target (14.0) as the SDK version, so macOS 26
+            // and later run the app in compatibility mode with the old toolbar, whose band
+            // overhangs the sidebar. Recording SDK 26 opts into the current design;
+            // macOS 14 and 15 ignore it.
+            linkerSettings: [
+                .unsafeFlags(["-Xlinker", "-platform_version", "-Xlinker", "macos",
+                              "-Xlinker", "14.0", "-Xlinker", "26.0"])
+            ]
         ),
         .testTarget(
             name: "ProxyCoreTests",
