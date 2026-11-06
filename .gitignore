@@ -3,4 +3,4 @@
 .swiftpm/
 *.xcodeproj/xcuserdata/
 DerivedData/
-Package.resolved
+dist/

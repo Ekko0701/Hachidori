@@ -116,9 +116,12 @@ macOS용 HTTP/HTTPS 트래픽 디버깅 프록시 (Proxyman 유형).
 - [ ] 네트워크 스로틀링, 프로세스별 트래픽 귀속
 
 ### Phase 7 — 배포 (0.5주)
-- [ ] Developer ID 서명 + 공증, 하드닝 런타임
+- [x] `.app` 번들(`Packaging/Info.plist`) + 유니버설 릴리스 빌드 + DMG 패키징 (`scripts/package.sh`)
+- [x] Developer ID 서명 + 공증, 하드닝 런타임 (로컬 스크립트 + 태그 푸시 시 GitHub Actions 초안 릴리스)
+- [x] 배포 전 안정성: Root CA 키 소유자 전용 권한(600), 비정상 종료 후 시스템 프록시 복구, 개발용 플래그는 디버그 빌드 전용
+- [ ] Homebrew cask (첫 공개 릴리스 후, 본인 탭부터)
+- [ ] Sparkle 자동 업데이트
 - [ ] 인증서/프록시 설정용 권한 헬퍼(SMAppService) 필요 여부 검토
-- [ ] DMG 패키징
 
 ---
 
