@@ -13,6 +13,28 @@ final class CertificateAuthorityTests: XCTestCase {
         return try CertificateAuthority.generateOrLoad(directoryURL: dir)
     }
 
+    private func permissions(_ url: URL) throws -> Int {
+        try (FileManager.default.attributesOfItem(atPath: url.path)[.posixPermissions] as? NSNumber)?.intValue ?? -1
+    }
+
+    func testPrivateKeyIsOwnerOnly() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("hachidori-ca-perms-\(UUID().uuidString)", isDirectory: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        let keyURL = dir.appendingPathComponent("rootCA.key.pem")
+
+        _ = try CertificateAuthority.generateOrLoad(directoryURL: dir)
+        XCTAssertEqual(try permissions(keyURL), 0o600)
+        XCTAssertEqual(try permissions(dir), 0o700)
+
+        // A key left world-readable by an older build is tightened on the next load.
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: keyURL.path)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path)
+        _ = try CertificateAuthority.generateOrLoad(directoryURL: dir)
+        XCTAssertEqual(try permissions(keyURL), 0o600)
+        XCTAssertEqual(try permissions(dir), 0o700)
+    }
+
     /// Apple platforms refuse TLS server certs valid for more than 825 days
     /// (and 398 days under newer policies); the old 1-day backdate + 825 days = 826 broke iOS.
     func testLeafValidityFitsApplePolicy() throws {

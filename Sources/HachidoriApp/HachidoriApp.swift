@@ -19,8 +19,9 @@ struct HachidoriApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
 
+    #if DEBUG
     /// `Hachidori --record`: start the proxy immediately without touching the
-    /// system proxy (handy for development and UI testing).
+    /// system proxy (handy for development and UI testing). Debug builds only.
     private static let autoRecord = CommandLine.arguments.contains("--record")
     /// `Hachidori --lan`: with `--record`, also accept LAN devices (bind 0.0.0.0).
     private static let autoLAN = CommandLine.arguments.contains("--lan")
@@ -31,6 +32,7 @@ struct HachidoriApp: App {
         guard let i = args.firstIndex(of: "--port"), i + 1 < args.count else { return nil }
         return Int(args[i + 1])
     }()
+    #endif
 
     var body: some Scene {
         WindowGroup("Hachidori") {
@@ -38,6 +40,7 @@ struct HachidoriApp: App {
                 .environment(model)
                 .frame(minWidth: 1100, minHeight: 600)
                 .onAppear {
+                    #if DEBUG
                     if Self.autoRecord && !model.isRecording {
                         model.autoConfigureSystemProxy = false
                         model.allowLANDevices = Self.autoLAN
@@ -45,6 +48,7 @@ struct HachidoriApp: App {
                         model.startRecording()
                     }
                     DevSnapshotDriver.startIfRequested(model: model)
+                    #endif
                 }
         }
         .windowStyle(.titleBar)
@@ -60,9 +64,11 @@ struct HachidoriApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.regular)
-        // A SwiftPM executable has no Info.plist to name an icon, so the Dock
-        // icon is set here from the bundled .icns.
-        if let url = Bundle.module.url(forResource: "AppIcon", withExtension: "icns"),
+        // The packaged .app names its icon in Info.plist. A bare `swift run` executable
+        // has no Info.plist, so set the Dock icon from the SwiftPM resource bundle,
+        // which only exists beside a development build.
+        if Bundle.main.bundleIdentifier == nil,
+           let url = Bundle.module.url(forResource: "AppIcon", withExtension: "icns"),
            let icon = NSImage(contentsOf: url) {
             NSApplication.shared.applicationIconImage = icon
         }
@@ -218,7 +224,10 @@ final class AppModel {
 
     /// Automatically point the macOS system proxy at Hachidori while recording.
     var autoConfigureSystemProxy: Bool = true
-    private let systemProxy = SystemProxyConfigurator()
+    private let systemProxy = SystemProxyConfigurator(
+        backupURL: AppPaths.supportDirectory().appendingPathComponent("system-proxy-backup.json"))
+    /// Keeps the termination signal sources alive.
+    private var signalSources: [DispatchSourceSignal] = []
 
     /// Response-override rules (edited in the Rules sheet, applied live by the proxy).
     var overrideRules: [OverrideRule] = []
@@ -260,11 +269,25 @@ final class AppModel {
         (stream, continuation) = AsyncStream<CapturedTransaction>.makeStream()
         self.certificateAuthority = AppModel.makeCertificateAuthority()
 
+        // A previous session that crashed or was force-quit may have left the system proxy
+        // pointing at a port nobody listens on, which cuts the Mac off the internet.
+        if systemProxy.recoverAfterCrash() {
+            statusText = "Restored the system proxy left set by the previous session"
+        }
+
         // Always restore the system proxy on quit, even if the user didn't stop first.
         let systemProxy = self.systemProxy
         NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification,
                                                object: nil, queue: .main) { _ in
             systemProxy.restore()
+        }
+        // `kill` and Ctrl-C end the process without a normal quit; route them through one.
+        for sig in [SIGTERM, SIGINT, SIGHUP] {
+            signal(sig, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
+            source.setEventHandler { NSApp.terminate(nil) }
+            source.resume()
+            signalSources.append(source)
         }
     }
 
@@ -459,6 +482,8 @@ final class AppModel {
 
 // MARK: - Development snapshot driver
 
+#if DEBUG
+
 /// `Hachidori --snapshot-dir <dir>`: polls `<dir>/cmd.txt` for simple commands
 /// (`select <n>`, `tab <name>`, `mode <name>`, `group on|off`, `host <name>|all`, `client <ip>|all`,
 /// `search <text>`, `snap <file.png>`, `snapview cert|breakpoints <file.png>`) so the UI can be driven and rendered to
@@ -566,3 +591,4 @@ extension Notification.Name {
     /// Development only: ask the traffic view to present a named sheet.
     static let devShowSheet = Notification.Name("Hachidori.devShowSheet")
 }
+#endif

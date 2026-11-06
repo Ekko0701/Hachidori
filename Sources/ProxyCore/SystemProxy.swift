@@ -5,10 +5,12 @@ import Foundation
 /// On `enable` it records the current proxy settings of the primary network
 /// service and points them at the local proxy; `restore` puts them back exactly.
 /// Restoration is best-effort and must be called on stop **and** on app quit so
-/// the user is never left with a dangling proxy.
+/// the user is never left with a dangling proxy. With a `backupURL`, the prior state
+/// is also written to disk, so `recoverAfterCrash()` can undo a session that ended
+/// without restoring (a crash or force quit).
 public final class SystemProxyConfigurator: @unchecked Sendable {
 
-    public struct ServiceProxyState {
+    public struct ServiceProxyState: Codable, Equatable {
         var service: String
         var httpEnabled: Bool
         var httpServer: String
@@ -18,10 +20,22 @@ public final class SystemProxyConfigurator: @unchecked Sendable {
         var httpsPort: String
     }
 
+    /// What `enable` changed: the prior state, the proxy it pointed the service at,
+    /// and the process that did it.
+    struct Backup: Codable, Equatable {
+        var previous: ServiceProxyState
+        var host: String
+        var port: Int
+        var pid: Int32 = ProcessInfo.processInfo.processIdentifier
+    }
+
     private let lock = NSLock()
     private var saved: ServiceProxyState?
+    private let backupURL: URL?
 
-    public init() {}
+    public init(backupURL: URL? = nil) {
+        self.backupURL = backupURL
+    }
 
     public var isActive: Bool {
         lock.lock(); defer { lock.unlock() }
@@ -34,6 +48,7 @@ public final class SystemProxyConfigurator: @unchecked Sendable {
         guard let service = primaryService() else { return false }
         let state = readState(service: service)
         lock.lock(); saved = state; lock.unlock()
+        writeBackup(Backup(previous: state, host: host, port: port))
 
         _ = run("/usr/sbin/networksetup", ["-setwebproxy", service, host, String(port)])
         _ = run("/usr/sbin/networksetup", ["-setsecurewebproxy", service, host, String(port)])
@@ -44,6 +59,47 @@ public final class SystemProxyConfigurator: @unchecked Sendable {
     public func restore() {
         lock.lock(); let state = saved; saved = nil; lock.unlock()
         guard let state else { return }
+        apply(state)
+        removeBackup()
+    }
+
+    /// Undo a previous session that set the system proxy and never restored it.
+    /// Restores only while the service still points at that session's proxy, so a
+    /// setting the user changed by hand in the meantime is left alone.
+    /// Returns whether settings were restored.
+    @discardableResult
+    public func recoverAfterCrash() -> Bool {
+        guard let backupURL, let data = try? Data(contentsOf: backupURL) else { return false }
+        let backup = try? JSONDecoder().decode(Backup.self, from: data)
+        // Another Hachidori process (say, a debug build beside the installed app) still owns it.
+        if let backup, backup.pid != ProcessInfo.processInfo.processIdentifier, kill(backup.pid, 0) == 0 {
+            return false
+        }
+        removeBackup()
+        guard let backup else { return false }
+        guard Self.isStillPointingAtProxy(readState(service: backup.previous.service), backup: backup) else { return false }
+        apply(backup.previous)
+        return true
+    }
+
+    static func isStillPointingAtProxy(_ current: ServiceProxyState, backup: Backup) -> Bool {
+        let port = String(backup.port)
+        let http = current.httpEnabled && current.httpServer == backup.host && current.httpPort == port
+        let https = current.httpsEnabled && current.httpsServer == backup.host && current.httpsPort == port
+        return http || https
+    }
+
+    private func writeBackup(_ backup: Backup) {
+        guard let backupURL, let data = try? JSONEncoder().encode(backup) else { return }
+        try? data.write(to: backupURL, options: .atomic)
+    }
+
+    private func removeBackup() {
+        guard let backupURL else { return }
+        try? FileManager.default.removeItem(at: backupURL)
+    }
+
+    private func apply(_ state: ServiceProxyState) {
         let ns = "/usr/sbin/networksetup"
 
         if state.httpEnabled, !state.httpServer.isEmpty {

@@ -55,6 +55,9 @@ public final class CertificateAuthority: @unchecked Sendable {
     public static func generateOrLoad(directoryURL: URL) throws -> CertificateAuthority {
         let fm = FileManager.default
         try fm.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        // Anyone holding the key can intercept traffic on every device that trusts this CA,
+        // so the folder and key are owner-only. Files from older builds are tightened here too.
+        try fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directoryURL.path)
         let certURL = directoryURL.appendingPathComponent("rootCA.pem")
         let keyURL = directoryURL.appendingPathComponent("rootCA.key.pem")
         let name = try Self.rootName()
@@ -63,6 +66,7 @@ public final class CertificateAuthority: @unchecked Sendable {
            let keyPEM = try? String(contentsOf: keyURL, encoding: .utf8),
            let certificate = try? Certificate(pemEncoded: certPEM),
            let p256 = try? P256.Signing.PrivateKey(pemRepresentation: keyPEM) {
+            try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: keyURL.path)
             return try CertificateAuthority(certificate: certificate,
                                             privateKey: Certificate.PrivateKey(p256),
                                             certificateURL: certURL)
@@ -90,7 +94,11 @@ public final class CertificateAuthority: @unchecked Sendable {
 
         let certPEM = try certificate.serializeAsPEM().pemString
         try certPEM.write(to: certURL, atomically: true, encoding: .utf8)
-        try p256.pemRepresentation.write(to: keyURL, atomically: true, encoding: .utf8)
+        try? fm.removeItem(at: keyURL)
+        guard fm.createFile(atPath: keyURL.path, contents: Data(p256.pemRepresentation.utf8),
+                            attributes: [.posixPermissions: 0o600]) else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: keyURL.path])
+        }
 
         return try CertificateAuthority(certificate: certificate,
                                         privateKey: privateKey,
