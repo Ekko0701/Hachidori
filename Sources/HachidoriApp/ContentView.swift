@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import ProxyCore
 
 struct ContentView: View {
@@ -16,6 +17,7 @@ struct ContentView: View {
             DetailView()
                 .navigationSplitViewColumnWidth(min: 380, ideal: 500)
         }
+        .background(TitlebarSeparatorRemover())
         .task {
             for await tx in model.stream {
                 model.ingest(tx)
@@ -30,6 +32,27 @@ struct ContentView: View {
             if let pending = model.pausedItems.first {
                 BreakpointSheet(pending: pending).environment(model)
             }
+        }
+    }
+}
+
+/// Turns off the hairline under the window toolbar.
+///
+/// SwiftPM records SDK version 14 in the executable, so macOS draws the pre-26
+/// toolbar: one band across the list and inspector, with a hairline that starts
+/// on the sidebar divider and pokes a couple of points into the sidebar. The band
+/// alone already separates the toolbar, and hiding the band instead would let the
+/// list/inspector divider run up between the toolbar buttons.
+private struct TitlebarSeparatorRemover: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { WindowHook() }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        nsView.window?.titlebarSeparatorStyle = .none
+    }
+
+    private final class WindowHook: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            window?.titlebarSeparatorStyle = .none
         }
     }
 }
