@@ -122,6 +122,8 @@ struct TransactionListView: View {
 
 struct FilterBar: View {
     @Environment(AppModel.self) private var model
+    /// The toggles' symbols differ in width; a shared frame keeps the buttons the same size.
+    private static let toggleIconWidth: CGFloat = 20
 
     var body: some View {
         @Bindable var model = model
@@ -186,6 +188,7 @@ struct FilterBar: View {
             Toggle(isOn: $model.hideConnectErrors) {
                 Label("Hide CONNECT Errors", systemImage: "eye.slash")
                     .labelStyle(.iconOnly)
+                    .frame(width: Self.toggleIconWidth)
             }
             .toggleStyle(.button)
             .help("Hide failed CONNECT tunnels (e.g. a device that does not trust the Root CA)")
@@ -193,6 +196,7 @@ struct FilterBar: View {
             Toggle(isOn: $model.groupByHost) {
                 Label("Group by Host", systemImage: "rectangle.3.group")
                     .labelStyle(.iconOnly)
+                    .frame(width: Self.toggleIconWidth)
             }
             .toggleStyle(.button)
             .help("Group requests by host")
