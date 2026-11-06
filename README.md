@@ -1,103 +1,95 @@
-# Hachidori (ハチドリ)
+# Hachidori
 
-A native macOS HTTP/HTTPS debugging proxy — inspect requests and responses while
-developing apps and websites. Inspired by Proxyman; UI inspired by GitKraken / Fork.
+A native macOS HTTP/HTTPS debugging proxy. See every request your apps and websites make,
+inspect the responses, and change them on the fly.
 
-> Status: **Phase 0–4 complete** — HTTP **and HTTPS (TLS MITM)** interception, WebSocket
-> capture, system-proxy auto-config, rules (Map Local / Rewrite), breakpoints, and a full
-> inspector UI (filters, host grouping, syntax highlighting, previews, timing waterfall).
-> Releases are signed with a Developer ID and notarized by Apple. Next: persistence &
-> HAR export — see [PLAN.md](PLAN.md).
+<!-- screenshot: main window with captured traffic and a request open in the inspector -->
 
-## Install
+## Installation
 
-Download `Hachidori-<version>.dmg` from [Releases](https://github.com/Ekko0701/Hachidori/releases),
-open it, and drag **Hachidori** into **Applications**. It runs on macOS 14 or later, on Apple
-silicon and Intel Macs.
+1. Download the latest `Hachidori-<version>.dmg` from
+   [Releases](https://github.com/Ekko0701/Hachidori/releases).
+2. Open the DMG and drag **Hachidori** into **Applications**.
+3. Launch Hachidori from Applications.
 
-On first launch:
+Hachidori runs on macOS 14 or later, on Apple silicon and Intel Macs. Releases are signed
+and notarized by Apple, so they open without a security warning.
 
-1. Press **Record**. Hachidori points this Mac's HTTP/HTTPS proxy at itself while
-   recording and puts the previous setting back when you stop or quit. If it ever ends
-   without doing so, it restores the setting on the next launch.
-2. For HTTPS, open the **Certificate** toolbar popover and trust the Root CA. Each
-   installation creates its own CA; its private key stays in
-   `~/Library/Application Support/Hachidori`, readable only by you.
-3. To capture a phone or tablet, follow [docs/device-testing.md](docs/device-testing.md).
+<!-- screenshot: the DMG window with Hachidori and the Applications shortcut -->
 
-## Architecture
+## Usage
 
-| Layer | Module | Notes |
-|-------|--------|-------|
-| Proxy engine | `ProxyCore` | SwiftNIO-based MITM proxy, buffered HTTP forwarding + capture |
-| UI | `HachidoriApp` | SwiftUI `NavigationSplitView` / `Table`, native macOS components |
+### Capture traffic from this Mac
 
-```
-Sources/
-  ProxyCore/       ProxyServer, CertificateAuthority, WebSocket, Overrides, Breakpoints,
-                   SystemProxy, Transaction (+ timing), BodyDecoding (gzip/deflate/br),
-                   TextEncoding (charset from Content-Type / <meta charset>)
-  HachidoriApp/     HachidoriApp (@main, AppModel), ContentView (shell/sidebar),
-                   TrafficListView (filters + table), InspectorViews (tabs/headers),
-                   BodyViews (pretty/raw/preview/hex + highlighter), TimingView, RulesView,
-                   BreakpointViews, Format, TrafficModel
-                   Resources/AppIcon.icns (app icon)
-Packaging/         Info.plist for the .app bundle
-scripts/           package.sh: release build, .app, signing, notarization, DMG
-Tests/
-  ProxyCoreTests/  unit + end-to-end integration tests
-```
+1. Press **Record** in the toolbar, or ⌘R.
+2. Use your browser or app as usual. Requests appear in the list as they happen.
+3. Press **Stop** when you are done.
 
-## Build & run
+While recording, Hachidori points this Mac's HTTP and HTTPS proxy at itself. Stopping or
+quitting puts your previous proxy settings back. To manage the proxy yourself, turn off
+**Auto-configure macOS system proxy** in the **Certificate** popover and use
+`127.0.0.1:9090`.
 
-```bash
-swift build
-swift run Hachidori        # launches the app
-swift test                # unit + integration tests
-```
+<!-- screenshot: toolbar with the Record button -->
 
-Development flags (debug builds only; release builds ignore them):
+### Decrypt HTTPS
 
-```bash
-swift run Hachidori --record           # start recording immediately, without touching the system proxy
-swift run Hachidori --record --lan     # …and accept LAN devices (bind 0.0.0.0)
-swift run Hachidori --record --port 9091   # …on another port (beside an instance already on 9090)
-swift run Hachidori --serve 9090       # headless proxy (no UI), logs to stderr
-```
+HTTPS traffic stays encrypted until you trust Hachidori's Root CA.
 
-## Try it (HTTP)
+1. Click the **Certificate** button in the toolbar.
+2. Click **Reveal Root CA in Finder**, then double-click `rootCA.pem` to add it to your
+   login keychain.
+3. In Keychain Access, open **Hachidori Root CA**, expand **Trust**, and set it to
+   **Always Trust**.
 
-1. Launch the app and press **Record** (starts the proxy on `127.0.0.1:9090`).
-2. Route traffic through it:
+Each installation creates its own Root CA. Its private key never leaves
+`~/Library/Application Support/Hachidori` and is readable only by your user account.
 
-```bash
-curl -x http://127.0.0.1:9090 http://example.com
-```
+<!-- screenshot: Certificate popover -->
+<!-- screenshot: Keychain Access trust settings set to Always Trust -->
 
-The request appears live in the list; select it to inspect headers, body (pretty / raw /
-preview / hex; legacy charsets such as EUC-KR are decoded from the declared
-charset), and a timing waterfall. The sidebar groups traffic per device (this Mac and
-each LAN client by IP), so several phones can share one proxy without mixing up. A device
-that does not trust the CA floods the list with `CONNECT ERR` rows; the eye-slash button in the
-filter bar hides them (the status bar still counts them). For HTTPS, install and trust the Root CA from the
-**Certificate** toolbar popover first.
+### Inspect a request
 
-## Testing a real device
+Select a request to open it in the inspector on the right.
 
-Step-by-step guide (Korean) for pointing an iOS/Android build at Hachidori and
-rewriting its API / WebView responses: [docs/device-testing.md](docs/device-testing.md).
+- **Overview** shows the URL, method, status, content type and size at a glance.
+- **Request** and **Response** show headers and the body as Pretty, Raw, Preview or Hex.
+- **Timing** breaks the request down into connect, wait and download.
 
-## Requirements
+Use **Copy URL** or **Copy as cURL** to reproduce a request in the terminal. The filter bar
+narrows the list by method, status or content type, and the search field matches the URL,
+method or status.
 
-- macOS 14+
-- Swift 6.3 / Xcode 26+ (to build)
+<!-- screenshot: inspector showing a JSON response in Pretty mode -->
 
-## Releasing
+### Capture a phone or tablet
 
-`scripts/package.sh <version>` builds a universal `dist/Hachidori.app` and
-`dist/Hachidori-<version>.dmg`, signed and notarized. Pushing a `v*` tag does the same in
-GitHub Actions and drafts a release. Setup and checklist (Korean):
-[docs/releasing.md](docs/releasing.md).
+1. Connect the device and the Mac to the same Wi-Fi network.
+2. In the **Certificate** popover, turn on **Test on physical devices (LAN)**, then restart
+   recording.
+3. On the device, set the Wi-Fi HTTP proxy to the address shown in the popover.
+4. On the device, open that address in the browser to download the Root CA, install it,
+   and trust it.
+
+Each device appears separately in the sidebar. For iOS, Android and Flutter details, see
+the [device testing guide](docs/device-testing.md) (Korean).
+
+<!-- screenshot: Certificate popover with LAN testing on, showing the Mac's address -->
+<!-- screenshot: sidebar with a device and its hosts -->
+
+### Change responses
+
+- **Rules** rewrite matching responses: replace the status code, headers or body, or
+  answer locally without contacting the server (Map Local).
+- **Breakpoints** pause matching requests or responses so you can edit them before they
+  continue, or abort them.
+
+<!-- screenshot: Rules sheet with a rule open -->
+
+## Development
+
+Building from source, the project layout and the release process are described in
+[docs/development.md](docs/development.md).
 
 ## License
 
