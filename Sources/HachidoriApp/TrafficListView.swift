@@ -53,6 +53,10 @@ struct TransactionListView: View {
         }
         .searchable(text: $model.searchText, placement: .toolbar, prompt: "Filter by URL, method or status")
         .toolbar { toolbarContent }
+        // The executable links with SDK version 14, so macOS draws the pre-26 toolbar,
+        // whose filled band and bottom hairline overhang this column's leading edge
+        // by a couple of points. Without the fill, the column starts cleanly under the title.
+        .toolbarBackground(.hidden, for: .windowToolbar)
         .navigationTitle("Hachidori")
         .navigationSubtitle(subtitle)
         .sheet(isPresented: $showingRules) {
