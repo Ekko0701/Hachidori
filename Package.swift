@@ -42,7 +42,8 @@ let package = Package(
         ),
         .executableTarget(
             name: "HachidoriApp",
-            dependencies: ["ProxyCore"]
+            dependencies: ["ProxyCore"],
+            resources: [.copy("Resources/AppIcon.icns"), .copy("Resources/AppIcon-1024.png")]
         ),
         .testTarget(
             name: "ProxyCoreTests",

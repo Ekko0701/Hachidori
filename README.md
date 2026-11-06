@@ -24,6 +24,7 @@ Sources/
                    TrafficListView (filters + table), InspectorViews (tabs/headers),
                    BodyViews (pretty/raw/preview/hex + highlighter), TimingView, RulesView,
                    BreakpointViews, Format, TrafficModel
+                   Resources/AppIcon.icns (Dock icon; set at launch, no bundle yet)
 Tests/
   ProxyCoreTests/  unit + end-to-end integration tests
 ```

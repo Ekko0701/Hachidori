@@ -60,6 +60,12 @@ struct HachidoriApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.regular)
+        // A SwiftPM executable has no Info.plist to name an icon, so the Dock
+        // icon is set here from the bundled .icns.
+        if let url = Bundle.module.url(forResource: "AppIcon", withExtension: "icns"),
+           let icon = NSImage(contentsOf: url) {
+            NSApplication.shared.applicationIconImage = icon
+        }
         NSApplication.shared.activate(ignoringOtherApps: true)
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
@@ -526,6 +532,12 @@ final class DevSnapshotDriver {
             case "addrule":
                 model.overrideRules.append(OverrideRule(name: "Demo 500", urlContains: "/api/dashboard/notice",
                                                         overrideStatus: true, statusCode: 500))
+            case "snapicon":
+                // `snapicon <file.png>`: the Dock icon as currently set.
+                if let tiff = NSApp.applicationIconImage?.tiffRepresentation,
+                   let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+                    try? png.write(to: dir.appendingPathComponent(arg))
+                }
             case "snap":
                 // Give SwiftUI a couple of frames to lay out before rendering.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
