@@ -14,10 +14,10 @@
    security find-identity -v -p codesigning
    ```
 
-2. 공증 자격 증명을 키체인에 저장합니다. 암호는 [appleid.apple.com](https://appleid.apple.com)에서 만든 **앱 암호**를 씁니다.
+2. 공증 자격 증명을 키체인에 저장합니다. 개인 개발자 계정은 App Store Connect API 키를 만들 수 없으므로 Apple ID와 **앱 암호**를 씁니다. 앱 암호는 [account.apple.com](https://account.apple.com)의 로그인 및 보안 → 앱 암호에서 만들고, `abcd-efgh-ijkl-mnop` 형태입니다. Apple ID 로그인 암호를 넣으면 401 오류가 납니다.
 
    ```bash
-   xcrun notarytool store-credentials hachidori-notary --apple-id <Apple ID> --team-id <팀 ID>
+   xcrun notarytool store-credentials hachidori-notary --apple-id <Apple ID> --team-id 34JS69S5XZ
    ```
 
 ### GitHub Actions 시크릿
@@ -29,9 +29,9 @@
 | `DEVELOPER_ID_P12_BASE64` | 키체인 접근에서 Developer ID 인증서와 개인키를 `.p12`로 내보낸 뒤 base64로 인코딩한 값 |
 | `DEVELOPER_ID_P12_PASSWORD` | 그 `.p12`를 내보낼 때 정한 암호 |
 | `KEYCHAIN_PASSWORD` | 아무 임의 문자열 (CI에서 임시 키체인을 잠그는 데만 씀) |
-| `NOTARY_KEY_BASE64` | App Store Connect → 사용자 및 액세스 → 통합 → API 키(.p8)를 base64로 인코딩한 값 |
-| `NOTARY_KEY_ID` | 그 API 키의 키 ID |
-| `NOTARY_ISSUER_ID` | 같은 화면의 발급자(Issuer) ID |
+| `APPLE_ID` | 개발자 계정의 Apple ID 이메일 |
+| `APPLE_APP_PASSWORD` | 위에서 만든 앱 암호 (CI용으로 따로 하나 더 만들어 두면 나중에 하나만 폐기할 수 있습니다) |
+| `APPLE_TEAM_ID` | `34JS69S5XZ` |
 
 `gh`로 넣을 수도 있습니다.
 
@@ -40,8 +40,10 @@ base64 -i developer-id.p12 | gh secret set DEVELOPER_ID_P12_BASE64
 ```
 
 ```bash
-base64 -i AuthKey_XXXXXXXXXX.p8 | gh secret set NOTARY_KEY_BASE64
+gh secret set APPLE_APP_PASSWORD
 ```
+
+마지막 명령은 값을 물어보므로, 앱 암호를 붙여넣고 Enter를 누릅니다.
 
 ## 2. 릴리스 절차
 

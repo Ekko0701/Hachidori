@@ -34,17 +34,17 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
           rm "$RUNNER_TEMP/developer-id.p12"
 
+      # Individual developer accounts cannot create App Store Connect API keys,
+      # so notarization signs in with the Apple ID and an app-specific password.
       - name: Store notarization credentials
         env:
-          NOTARY_KEY_BASE64: ${{ secrets.NOTARY_KEY_BASE64 }}
-          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
-          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          echo "$NOTARY_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
           xcrun notarytool store-credentials hachidori-notary \
-            --key "$RUNNER_TEMP/notary.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" \
+            --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" \
             --keychain "$KEYCHAIN"
-          rm "$RUNNER_TEMP/notary.p8"
 
       - name: Test
         run: swift test
