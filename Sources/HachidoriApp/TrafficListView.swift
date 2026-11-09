@@ -124,9 +124,6 @@ struct TransactionListView: View {
 
 struct FilterBar: View {
     @Environment(AppModel.self) private var model
-    /// The toggles' symbols differ in width; a shared frame keeps the buttons the same size.
-    private static let toggleIconWidth: CGFloat = 20
-
     var body: some View {
         @Bindable var model = model
         HStack(spacing: 8) {
@@ -190,17 +187,15 @@ struct FilterBar: View {
             Toggle(isOn: $model.hideConnectErrors) {
                 Label("Hide CONNECT Errors", systemImage: "eye.slash")
                     .labelStyle(.iconOnly)
-                    .frame(width: Self.toggleIconWidth)
             }
-            .toggleStyle(.button)
+            .toggleStyle(.filterIcon)
             .help("Hide failed CONNECT tunnels (e.g. a device that does not trust the Root CA)")
 
             Toggle(isOn: $model.groupByHost) {
                 Label("Group by Host", systemImage: "rectangle.3.group")
                     .labelStyle(.iconOnly)
-                    .frame(width: Self.toggleIconWidth)
             }
-            .toggleStyle(.button)
+            .toggleStyle(.filterIcon)
             .help("Group requests by host")
         }
         .controlSize(.small)
@@ -208,6 +203,35 @@ struct FilterBar: View {
         .padding(.vertical, 6)
         .background(.bar)
     }
+}
+
+/// An icon toggle drawn the same size on and off. The system's button-style toggle
+/// draws its "on" bezel taller than its "off" one, so neighbouring toggles in
+/// different states looked mismatched.
+struct FilterIconToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Button { configuration.isOn.toggle() } label: { configuration.label }
+            .buttonStyle(Bezel(isOn: configuration.isOn))
+            .accessibilityAddTraits(configuration.isOn ? .isSelected : [])
+    }
+
+    private struct Bezel: ButtonStyle {
+        let isOn: Bool
+
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .foregroundStyle(isOn ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+                .frame(width: 40, height: 18)
+                .background(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary)))
+                .opacity(configuration.isPressed ? 0.7 : 1)
+                .contentShape(Rectangle())
+        }
+    }
+}
+
+extension ToggleStyle where Self == FilterIconToggleStyle {
+    static var filterIcon: FilterIconToggleStyle { FilterIconToggleStyle() }
 }
 
 // MARK: - Table
