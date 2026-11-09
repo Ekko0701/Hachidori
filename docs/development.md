@@ -20,6 +20,7 @@ swift run Hachidori --record               # start recording immediately, withou
 swift run Hachidori --record --lan         # …and accept LAN devices (bind 0.0.0.0)
 swift run Hachidori --record --port 9091   # …on another port (beside an instance already on 9090)
 swift run Hachidori --serve 9090           # headless proxy (no UI), logs to stderr
+swift run Hachidori --support-dir /tmp/hd  # keep the CA, saved rules and proxy backup in another folder
 ```
 
 Quick check over plain HTTP, with the app recording:
@@ -37,8 +38,8 @@ curl -x http://127.0.0.1:9090 http://example.com
 
 ```
 Sources/
-  ProxyCore/       ProxyServer, CertificateAuthority, WebSocket, Overrides, Breakpoints,
-                   SystemProxy, Transaction (+ timing), BodyDecoding (gzip/deflate/br),
+  ProxyCore/       ProxyServer, CertificateAuthority, WebSocket, Overrides, SavedRules,
+                   Breakpoints, SystemProxy, Transaction (+ timing), BodyDecoding (gzip/deflate/br),
                    TextEncoding (charset from Content-Type / <meta charset>)
   HachidoriApp/    HachidoriApp (@main, AppModel), ContentView (shell/sidebar),
                    TrafficListView (filters + table), InspectorViews (tabs/headers),

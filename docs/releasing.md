@@ -113,4 +113,4 @@ brew install --cask ekko0701/tap/hachidori
 
 - 번들 ID는 `com.ekko0701.hachidori`입니다(`Packaging/Info.plist`). 바꾸면 사용자 설정 저장 위치가 바뀌므로 공개 후에는 바꾸지 않습니다.
 - 패키징한 앱은 설정을 번들 ID 도메인에 저장합니다. `swift run`으로 띄운 개발 빌드의 설정(창 크기 등)과는 따로 저장됩니다. Root CA는 둘이 같은 `~/Library/Application Support/Hachidori`를 씁니다.
-- `--record`, `--lan`, `--port`, `--snapshot-dir` 같은 개발용 플래그는 디버그 빌드에만 들어갑니다.
+- `--record`, `--lan`, `--port`, `--support-dir`, `--snapshot-dir` 같은 개발용 플래그는 디버그 빌드에만 들어갑니다.

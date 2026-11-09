@@ -116,6 +116,14 @@ enum HachidoriHeadless {
 enum AppPaths {
     /// `~/Library/Application Support/Hachidori`.
     static func supportDirectory() -> URL {
+        #if DEBUG
+        // `--support-dir <path>`: keep a development run's CA, rules and proxy backup
+        // apart from the installed app's.
+        let args = CommandLine.arguments
+        if let i = args.firstIndex(of: "--support-dir"), i + 1 < args.count {
+            return URL(fileURLWithPath: args[i + 1], isDirectory: true)
+        }
+        #endif
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
         return base.appendingPathComponent("Hachidori", isDirectory: true)
@@ -230,15 +238,25 @@ final class AppModel {
     private var signalSources: [DispatchSourceSignal] = []
 
     /// Response-override rules (edited in the Rules sheet, applied live by the proxy).
-    var overrideRules: [OverrideRule] = []
+    /// Saved to `rules.json` and restored at launch.
+    var overrideRules: [OverrideRule] = [] {
+        didSet { syncRules(); scheduleSave() }
+    }
     let ruleStore = RuleStore()
     func syncRules() { ruleStore.setRules(overrideRules) }
     var enabledRuleCount: Int { overrideRules.filter(\.isEnabled).count }
 
     /// Breakpoints: pause matching requests/responses so the user can edit or abort them.
-    var breakpointRequestsEnabled: Bool = false
-    var breakpointResponsesEnabled: Bool = false
-    var breakpointURLContains: String = ""
+    /// The switches start off at every launch; only the URL filter is saved.
+    var breakpointRequestsEnabled: Bool = false {
+        didSet { syncBreakpoints() }
+    }
+    var breakpointResponsesEnabled: Bool = false {
+        didSet { syncBreakpoints() }
+    }
+    var breakpointURLContains: String = "" {
+        didSet { syncBreakpoints(); scheduleSave() }
+    }
     var breakpointsEnabled: Bool { breakpointRequestsEnabled || breakpointResponsesEnabled }
     let breakpoints = BreakpointController()
     var pausedItems: [BreakpointPending] = []
@@ -261,6 +279,33 @@ final class AppModel {
         if case .response(_, let resume) = item.kind { resume(decision) }
     }
 
+    private let rulesFile = SavedRulesFile(url: AppPaths.supportDirectory().appendingPathComponent("rules.json"))
+    @ObservationIgnored private var pendingSave: Task<Void, Never>?
+
+    /// Coalesces saves while the user types in the rule editor.
+    private func scheduleSave() {
+        pendingSave?.cancel()
+        pendingSave = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            self?.saveRulesNow()
+        }
+    }
+
+    private func flushPendingSave() {
+        if pendingSave != nil { saveRulesNow() }
+    }
+
+    private func saveRulesNow() {
+        pendingSave?.cancel()
+        pendingSave = nil
+        do {
+            try rulesFile.save(SavedRules(rules: overrideRules, breakpointURLContains: breakpointURLContains))
+        } catch {
+            statusText = "Couldn't save rules: \(error.localizedDescription)"
+        }
+    }
+
     private var server: ProxyServer?
     let stream: AsyncStream<CapturedTransaction>
     private let continuation: AsyncStream<CapturedTransaction>.Continuation
@@ -275,11 +320,28 @@ final class AppModel {
             statusText = "Restored the system proxy left set by the previous session"
         }
 
-        // Always restore the system proxy on quit, even if the user didn't stop first.
+        switch rulesFile.load() {
+        case .none:
+            break
+        case .loaded(let saved):
+            overrideRules = saved.rules
+            breakpointURLContains = saved.breakpointURLContains
+        case .unreadable(let movedTo):
+            statusText = "Couldn't read saved rules; kept them as \(movedTo.lastPathComponent)"
+        }
+        // Loading is not an edit: hand the state to the engine without writing it back.
+        syncRules()
+        syncBreakpoints()
+        pendingSave?.cancel()
+        pendingSave = nil
+
+        // Always restore the system proxy on quit, even if the user didn't stop first,
+        // and write any rule edit still waiting for its debounced save.
         let systemProxy = self.systemProxy
         NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification,
-                                               object: nil, queue: .main) { _ in
+                                               object: nil, queue: .main) { [weak self] _ in
             systemProxy.restore()
+            MainActor.assumeIsolated { self?.flushPendingSave() }
         }
         // `kill` and Ctrl-C end the process without a normal quit; route them through one.
         for sig in [SIGTERM, SIGINT, SIGHUP] {
@@ -309,8 +371,6 @@ final class AppModel {
 
     func startRecording() {
         let cont = continuation
-        syncRules()
-        syncBreakpoints()
         let bindHost = allowLANDevices ? "0.0.0.0" : "127.0.0.1"
         let server = ProxyServer(port: listenPort, host: bindHost,
                                  ca: certificateAuthority, ruleStore: ruleStore,

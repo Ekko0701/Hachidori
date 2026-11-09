@@ -112,6 +112,7 @@ macOS용 HTTP/HTTPS 트래픽 디버깅 프록시 (Proxyman 유형).
 - [ ] HTTP/2 지원
 - [x] **Map Local(목 응답) + Rewrite(상태/헤더/본문 수정) 규칙** — 규칙 기반 오버라이드(`OverrideRule`/`RuleStore`), Rules 시트 UI, e2e 검증. 본문 교체 시 원서버 `Content-Encoding` 제거(압축 응답에도 안전, 2026-11-03)
 - [x] **Breakpoint (요청·응답 일시정지 후 편집/Abort)** — `BreakpointController`. 요청(메서드·헤더·바디)은 오리진 전, 응답(상태·헤더·바디)은 클라이언트 전 일시정지. Send Edited/Send Original/Abort. 압축 응답은 편집기에 디코딩된 본문으로 표시(`decodedForEditing`). e2e 검증
+- [x] **규칙·브레이크포인트 저장** — Rules와 브레이크포인트 URL 필터를 `~/Library/Application Support/Hachidori/rules.json`(0600)에 저장하고 실행 시 복원. 일시정지 스위치는 저장하지 않음(실행 직후 트래픽이 멈추는 것 방지). 편집 중 저장은 0.4초 디바운스, 종료 시 즉시 기록. 예전 버전 파일은 빠진 필드를 기본값으로, 읽을 수 없는 파일은 `rules.corrupt.json`으로 옮겨 보존 (2026-11-09)
 - [ ] Compose/Replay(요청 재전송)
 - [ ] 네트워크 스로틀링, 프로세스별 트래픽 귀속
 

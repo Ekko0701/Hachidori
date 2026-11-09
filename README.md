@@ -84,6 +84,10 @@ the [device testing guide](docs/device-testing.md) (Korean).
 - **Breakpoints** pause matching requests or responses so you can edit them before they
   continue, or abort them.
 
+Rules and the breakpoint URL filter are saved and come back the next time you open
+Hachidori. The breakpoint switches always start off, so traffic never pauses until you
+turn them on.
+
 <!-- screenshot: Rules sheet with a rule open -->
 
 ## Development

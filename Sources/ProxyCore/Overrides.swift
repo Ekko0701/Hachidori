@@ -64,6 +64,30 @@ public struct OverrideRule: Identifiable, Sendable, Equatable, Codable {
         self.extraHeaders = extraHeaders
     }
 
+    enum CodingKeys: String, CodingKey {
+        case id, name, isEnabled, methodFilter, urlContains, respondLocally
+        case overrideStatus, statusCode, overrideBody, body, contentType, extraHeaders
+    }
+
+    /// Fields missing from a saved rule take their defaults, so rules saved by an
+    /// older version still load after new fields are added.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = OverrideRule()
+        self.init(id: try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID(),
+                  name: try c.decodeIfPresent(String.self, forKey: .name) ?? d.name,
+                  isEnabled: try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? d.isEnabled,
+                  methodFilter: try c.decodeIfPresent(String.self, forKey: .methodFilter) ?? d.methodFilter,
+                  urlContains: try c.decodeIfPresent(String.self, forKey: .urlContains) ?? d.urlContains,
+                  respondLocally: try c.decodeIfPresent(Bool.self, forKey: .respondLocally) ?? d.respondLocally,
+                  overrideStatus: try c.decodeIfPresent(Bool.self, forKey: .overrideStatus) ?? d.overrideStatus,
+                  statusCode: try c.decodeIfPresent(Int.self, forKey: .statusCode) ?? d.statusCode,
+                  overrideBody: try c.decodeIfPresent(Bool.self, forKey: .overrideBody) ?? d.overrideBody,
+                  body: try c.decodeIfPresent(String.self, forKey: .body) ?? d.body,
+                  contentType: try c.decodeIfPresent(String.self, forKey: .contentType) ?? d.contentType,
+                  extraHeaders: try c.decodeIfPresent([HeaderKV].self, forKey: .extraHeaders) ?? d.extraHeaders)
+    }
+
     public func matches(method: String, url: String) -> Bool {
         guard isEnabled else { return false }
         if !methodFilter.isEmpty, methodFilter.uppercased() != method.uppercased() { return false }

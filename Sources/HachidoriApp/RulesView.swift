@@ -70,7 +70,6 @@ struct RulesView: View {
             }
         }
         .frame(minWidth: 680, minHeight: 480)
-        .onChange(of: model.overrideRules) { model.syncRules() }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done") { dismiss() }
