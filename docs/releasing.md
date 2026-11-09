@@ -67,7 +67,7 @@ gh secret set APPLE_APP_PASSWORD
 NOTARY_PROFILE=hachidori-notary scripts/package.sh 0.1.0
 ```
 
-결과물은 `dist/Hachidori.app`, `dist/Hachidori-0.1.0.dmg`, `dist/Hachidori-0.1.0.dmg.sha256`입니다. `NOTARY_PROFILE` 없이 실행하면 서명만 하고 공증은 건너뜁니다. 그 DMG는 다른 Mac에서 Gatekeeper가 막습니다.
+결과물은 `dist/Hachidori.app`와 `dist/Hachidori-0.1.0.dmg`이고, 마지막에 DMG의 SHA-256을 출력합니다. `NOTARY_PROFILE` 없이 실행하면 서명만 하고 공증은 건너뜁니다. 그 DMG는 다른 Mac에서 Gatekeeper가 막습니다.
 
 ## 3. 게시 전 수동 확인
 
@@ -80,7 +80,7 @@ NOTARY_PROFILE=hachidori-notary scripts/package.sh 0.1.0
 
 ## 4. Homebrew cask (첫 공개 릴리스 후)
 
-본인 탭 저장소 `Ekko0701/homebrew-tap`에 `Casks/hachidori.rb`를 만듭니다. `sha256`은 릴리스의 `.dmg.sha256` 값입니다.
+본인 탭 저장소 `Ekko0701/homebrew-tap`에 `Casks/hachidori.rb`를 만듭니다. `sha256`은 릴리스 페이지에서 DMG 옆에 표시되는 값(`sha256:` 뒤)이나 `shasum -a 256 Hachidori-<버전>.dmg`의 결과입니다.
 
 ```ruby
 cask "hachidori" do

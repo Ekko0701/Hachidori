@@ -67,7 +67,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           prerelease=()
           [[ "$version" == 0.* ]] && prerelease=(--prerelease)   # 0.x is beta
-          gh release create "$GITHUB_REF_NAME" dist/Hachidori-*.dmg dist/Hachidori-*.dmg.sha256 \
+          gh release create "$GITHUB_REF_NAME" dist/Hachidori-*.dmg \
             --title "Hachidori $version" --generate-notes --draft "${prerelease[@]}"
 
       - name: Remove the signing keychain

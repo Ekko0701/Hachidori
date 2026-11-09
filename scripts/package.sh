@@ -55,7 +55,7 @@ swift build -c release "${arch_flags[@]}"
 BIN_DIR="$(swift build -c release "${arch_flags[@]}" --show-bin-path)"
 
 step "Assembling $APP"
-rm -rf "$APP" "$DMG" "$DMG.sha256"
+rm -rf "$APP" "$DMG"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/Hachidori" "$APP/Contents/MacOS/Hachidori"
 cp Sources/HachidoriApp/Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
@@ -97,7 +97,7 @@ else
     echo "Not notarized (set NOTARY_PROFILE). Other Macs will block this build." >&2
 fi
 
-(cd "$DIST" && shasum -a 256 "$(basename "$DMG")" > "$(basename "$DMG").sha256")
 step "Done"
 ls -lh "$DMG"
-cat "$DMG.sha256"
+# GitHub shows each release asset's SHA-256, so no checksum file is published.
+shasum -a 256 "$DMG"
