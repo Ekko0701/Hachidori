@@ -15,6 +15,10 @@ inspect the responses, and change them on the fly.
 Hachidori runs on macOS 14 or later, on Apple silicon and Intel Macs. Releases are signed
 and notarized by Apple, so they open without a security warning.
 
+From 0.1.3 on, Hachidori checks GitHub for new releases. When one is out, an **Update**
+button appears in the toolbar; **Restart to Update** downloads it, checks its signature
+and reopens the new version. **Hachidori → Check for Updates…** checks right away.
+
 <!-- screenshot: the DMG window with Hachidori and the Applications shortcut -->
 
 ## Usage
