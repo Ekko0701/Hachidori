@@ -15,6 +15,8 @@ See every request your apps and websites make, inspect the responses, and change
 ![SwiftNIO](https://img.shields.io/badge/proxy-SwiftNIO-F05138)
 [![License: MIT](https://img.shields.io/github/license/Ekko0701/Hachidori)](LICENSE)
 
+**English** · [한국어](README.ko.md) · [日本語](README.ja.md) · [简体中文](README.zh-CN.md)
+
 </div>
 
 ![Hachidori showing captured requests and a JSON response in the inspector](docs/images/main.png)
