@@ -5,6 +5,7 @@ import ProxyCore
 /// Middle column: filter bar + the live, high-density traffic table.
 struct TransactionListView: View {
     @Environment(AppModel.self) private var model
+    @Environment(UpdateController.self) private var updater
     @State private var showingCertInfo = false
     @State private var showingRules = false
     @State private var showingBreakpoints = false
@@ -67,6 +68,24 @@ struct TransactionListView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        if let update = updater.available {
+            ToolbarItem(placement: .primaryAction) {
+                @Bindable var bindable = updater
+                Button {
+                    updater.isShowingUpdate.toggle()
+                } label: {
+                    Label("Update", systemImage: "arrow.down.circle.fill")
+                        .labelStyle(.titleAndIcon)
+                }
+                .tint(.accentColor)
+                .help("Hachidori \(update.version.description) is available")
+                .popover(isPresented: $bindable.isShowingUpdate, arrowEdge: .bottom) {
+                    UpdateView()
+                        .environment(updater)
+                        .environment(model)
+                }
+            }
+        }
         ToolbarItemGroup(placement: .primaryAction) {
             Button {
                 model.toggleRecording()

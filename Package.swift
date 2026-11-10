@@ -40,9 +40,11 @@ let package = Package(
                 .swiftLanguageMode(.v5)
             ]
         ),
+        // Checks GitHub Releases for a newer version and swaps it in on restart.
+        .target(name: "Updater"),
         .executableTarget(
             name: "HachidoriApp",
-            dependencies: ["ProxyCore"],
+            dependencies: ["ProxyCore", "Updater"],
             resources: [.copy("Resources/AppIcon.icns"), .copy("Resources/AppIcon-1024.png")],
             // SwiftPM records the deployment target (14.0) as the SDK version, so macOS 26
             // and later run the app in compatibility mode with the old toolbar, whose band
@@ -53,6 +55,7 @@ let package = Package(
                               "-Xlinker", "14.0", "-Xlinker", "26.0"])
             ]
         ),
+        .testTarget(name: "UpdaterTests", dependencies: ["Updater"]),
         .testTarget(
             name: "ProxyCoreTests",
             dependencies: [

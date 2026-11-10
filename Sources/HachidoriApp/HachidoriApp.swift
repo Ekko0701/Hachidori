@@ -18,6 +18,7 @@ enum HachidoriMain {
 struct HachidoriApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
+    @State private var updater = UpdateController()
 
     #if DEBUG
     /// `Hachidori --record`: start the proxy immediately without touching the
@@ -38,8 +39,10 @@ struct HachidoriApp: App {
         WindowGroup("Hachidori") {
             ContentView()
                 .environment(model)
+                .environment(updater)
                 .frame(minWidth: 1100, minHeight: 600)
                 .onAppear {
+                    updater.start()
                     #if DEBUG
                     if Self.autoRecord && !model.isRecording {
                         model.autoConfigureSystemProxy = false
@@ -55,6 +58,12 @@ struct HachidoriApp: App {
         .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") {
+                    Task { await updater.check(userInitiated: true) }
+                }
+                .disabled(!updater.canCheck)
+            }
         }
     }
 }
