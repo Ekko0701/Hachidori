@@ -2,7 +2,7 @@
 
 하치도리는 App Store 밖에서 배포합니다. 릴리스는 Developer ID로 서명하고 Apple 공증(notarization)을 받은 DMG이며, GitHub Releases에 올립니다.
 
-`scripts/package.sh`가 유니버설(Apple silicon + Intel) 릴리스 빌드, `.app` 번들, 서명, 공증, DMG까지 한 번에 만듭니다. `v*` 태그를 푸시하면 GitHub Actions가 같은 스크립트로 빌드해 **초안(draft) 릴리스**를 만듭니다.
+`scripts/package.sh`가 유니버설(Apple silicon + Intel) 릴리스 빌드, `.app` 번들, 서명, 공증, DMG까지 한 번에 만듭니다. `v*` 태그를 푸시하면 GitHub Actions가 같은 스크립트로 빌드해 DMG를 첨부한 릴리스를 **바로 공개**합니다.
 
 ## 1. 한 번만 하는 준비
 
@@ -59,7 +59,7 @@ gh secret set APPLE_APP_PASSWORD
    git push origin v0.1.0
    ```
 
-4. Actions의 **Release** 워크플로가 끝나면 Releases에 초안이 생깁니다. 릴리스 노트를 다듬고 **Publish**를 누릅니다. `0.x` 버전은 **Pre-release**로 표시됩니다.
+4. Actions의 **Release** 워크플로가 끝나면 DMG가 첨부된 릴리스가 바로 공개되고 **Latest**로 표시됩니다. 릴리스 노트는 커밋에서 자동으로 만들어지며, 필요하면 릴리스 페이지에서 고칩니다.
 
 로컬에서 직접 만들 때:
 
@@ -69,7 +69,9 @@ NOTARY_PROFILE=hachidori-notary scripts/package.sh 0.1.0
 
 결과물은 `dist/Hachidori.app`와 `dist/Hachidori-0.1.0.dmg`이고, 마지막에 DMG의 SHA-256을 출력합니다. `NOTARY_PROFILE` 없이 실행하면 서명만 하고 공증은 건너뜁니다. 그 DMG는 다른 Mac에서 Gatekeeper가 막습니다.
 
-## 3. 게시 전 수동 확인
+## 3. 공개 후 수동 확인
+
+릴리스는 태그를 푸시하면 바로 공개되므로, 큰 변경이 있었다면 태그 전에 로컬에서 `scripts/package.sh`로 만든 DMG로 먼저 확인합니다.
 
 하치도리를 한 번도 설치하지 않은 Mac이나 새 사용자 계정에서 확인합니다.
 

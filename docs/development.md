@@ -56,7 +56,7 @@ Tests/
 
 `scripts/package.sh <version>` builds a universal `dist/Hachidori.app` and
 `dist/Hachidori-<version>.dmg`, signed and notarized. Pushing a `v*` tag does the same in
-GitHub Actions and drafts a release. Setup and checklist (Korean):
+GitHub Actions and publishes a release with the DMG. Setup and checklist (Korean):
 [releasing.md](releasing.md).
 
 The roadmap is in [PLAN.md](../PLAN.md).

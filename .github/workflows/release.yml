@@ -1,4 +1,4 @@
-# Builds, signs, notarizes and drafts a GitHub Release when a v* tag is pushed.
+# Builds, signs, notarizes and publishes a GitHub Release with the DMG when a v* tag is pushed.
 # Repository secrets it needs are listed in docs/releasing.md.
 name: Release
 
@@ -60,15 +60,14 @@ jobs:
           NOTARY_PROFILE: hachidori-notary
         run: scripts/package.sh "${GITHUB_REF_NAME#v}"
 
-      - name: Draft the GitHub Release
+      # Published right away and marked Latest, so /releases/latest always serves the newest DMG.
+      - name: Publish the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="${GITHUB_REF_NAME#v}"
-          prerelease=()
-          [[ "$version" == 0.* ]] && prerelease=(--prerelease)   # 0.x is beta
           gh release create "$GITHUB_REF_NAME" dist/Hachidori-*.dmg \
-            --title "Hachidori $version" --generate-notes --draft "${prerelease[@]}"
+            --title "Hachidori $version" --generate-notes --latest
 
       - name: Remove the signing keychain
         if: always()

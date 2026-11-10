@@ -7,8 +7,8 @@ inspect the responses, and change them on the fly.
 
 ## Installation
 
-1. Download the latest `Hachidori-<version>.dmg` from
-   [Releases](https://github.com/Ekko0701/Hachidori/releases).
+1. Download `Hachidori-<version>.dmg` from the
+   [latest release](https://github.com/Ekko0701/Hachidori/releases/latest).
 2. Open the DMG and drag **Hachidori** into **Applications**.
 3. Launch Hachidori from Applications.
 
