@@ -617,6 +617,7 @@ final class DevSnapshotDriver {
             case "host": model.hostFilter = (arg == "all") ? nil : arg
             case "client": model.clientFilter = (arg == "all") ? nil : arg
             case "search": model.searchText = arg
+            case "statustext": model.statusText = arg
             case "snapview":
                 // `snapview cert|breakpoints <file.png>`: render a popover's content at its
                 // ideal size (the same sizing a popover uses) without opening it.
@@ -626,6 +627,9 @@ final class DevSnapshotDriver {
                 switch args[0] {
                 case "cert": view = AnyView(CertificateInfoView().environment(model))
                 case "breakpoints": view = AnyView(BreakpointConfigView().environment(model))
+                // The sidebar's status bar at the sidebar's narrowest width, and at a typical one.
+                case "status": view = AnyView(ProxyStatusBar().environment(model).frame(width: 170))
+                case "statuswide": view = AnyView(ProxyStatusBar().environment(model).frame(width: 250))
                 default: continue
                 }
                 let renderer = ImageRenderer(content: view.background(Color(nsColor: .windowBackgroundColor)))

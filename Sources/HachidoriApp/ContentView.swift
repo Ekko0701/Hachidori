@@ -271,37 +271,50 @@ private struct FailureCount: View {
 struct ProxyStatusBar: View {
     @Environment(AppModel.self) private var model
 
+    /// The status with each part on its own line ("Listening on …", "HTTP+HTTPS",
+    /// "System proxy set"), so a narrow sidebar shows all of it instead of cutting it short.
+    private var statusLines: [String] {
+        model.statusText.components(separatedBy: " · ").enumerated().map { index, part in
+            index == 0 ? part : part.prefix(1).uppercased() + part.dropFirst()
+        }
+    }
+
+    /// The request counts as one text, so it can wrap between its parts.
+    private var counts: Text {
+        let visible = model.visibleTransactions.count
+        var text = Text(visible == 1 ? "1 request" : "\(visible) requests")
+        if model.failureCount > 0 {
+            text = text + Text(" · ") + Text("\(model.failureCount) failed").foregroundStyle(.red)
+        }
+        if model.filteredTransactions.count != visible {
+            text = text + Text(" · \(model.filteredTransactions.count) shown")
+        }
+        if model.hiddenConnectErrorCount > 0 {
+            text = text + Text(" · \(model.hiddenConnectErrorCount) CONNECT errors hidden")
+        }
+        return text
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
+            HStack(alignment: .top, spacing: 6) {
                 Circle()
                     .fill(model.isRecording ? Color.green : Color.secondary)
                     .frame(width: 8, height: 8)
-                Text(model.statusText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Spacer()
-            }
-            if !model.transactions.isEmpty {
-                HStack(spacing: 4) {
-                    Text("\(model.visibleTransactions.count) requests")
-                    if model.failureCount > 0 {
-                        Text("·")
-                        Text("\(model.failureCount) failed").foregroundStyle(.red)
-                    }
-                    if model.filteredTransactions.count != model.visibleTransactions.count {
-                        Text("·")
-                        Text("\(model.filteredTransactions.count) shown")
-                    }
-                    if model.hiddenConnectErrorCount > 0 {
-                        Text("·")
-                        Text("\(model.hiddenConnectErrorCount) CONNECT errors hidden")
+                    .padding(.top, 3)   // level with the first line of text
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(statusLines, id: \.self) { line in
+                        Text(line)
                     }
                 }
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.tertiary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
+            if !model.transactions.isEmpty {
+                counts
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.tertiary)
             }
         }
         .padding(.horizontal, 12)

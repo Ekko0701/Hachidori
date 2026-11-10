@@ -94,6 +94,22 @@ turn them on.
 
 <!-- screenshot: Rules sheet with a rule open -->
 
+### See the API documentation for a request
+
+Import an OpenAPI 3.0 or 3.1 document (YAML or JSON) with **File → Import OpenAPI…**, or
+drop the file on the window. It appears under **API Docs** in the sidebar; click it to
+browse its operations in a separate window.
+
+When a captured request matches an operation in the document, the inspector gains a
+**Docs** tab. It shows the operation's parameters with the values the request sent, and
+marks the response that came back. Documents often list only production servers, so the
+document's overview page lets you set the hosts it applies to.
+
+[docs/samples/httpbin-openapi.yaml](docs/samples/httpbin-openapi.yaml) is a sample to try
+it with.
+
+<!-- screenshot: inspector Docs tab for a matched request -->
+
 ## Development
 
 Building from source, the project layout and the release process are described in
