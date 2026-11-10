@@ -656,6 +656,39 @@ final class DevSnapshotDriver {
             case "docselect":
                 // `docselect GET /users/{id}`: select an operation in the open document browser.
                 NotificationCenter.default.post(name: .devSelectOperation, object: nil, userInfo: ["id": arg])
+            case "shot":
+                // `shot <file.png> <title>`: capture the window whose title contains <title> as it
+                // is on screen, title bar, toolbar and sidebar included (`snap` can't draw those).
+                // `shot <file.png> sheet` captures the open sheet.
+                let args = arg.split(separator: " ", maxSplits: 1).map(String.init)
+                guard args.count == 2 else { break }
+                // Bring the window forward first, so it is drawn as the active window.
+                NSApp.activate(ignoringOtherApps: true)
+                captureTarget(titleContaining: args[1])?.makeKeyAndOrderFront(nil)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
+                    self?.capture(to: self!.dir.appendingPathComponent(args[0]), titleContaining: args[1])
+                }
+            case "divider":
+                // `divider <index> <x>`: move a divider of the main window's split view (0 = after
+                // the sidebar, 1 = before the inspector) to x points from the window's left edge.
+                let values = arg.split(separator: " ").compactMap { Double($0) }
+                guard values.count == 2, let root = captureTarget(titleContaining: "Hachidori")?.contentView else { break }
+                func splitView(in view: NSView) -> NSSplitView? {
+                    if let split = view as? NSSplitView, split.arrangedSubviews.count >= 3 { return split }
+                    for child in view.subviews {
+                        if let found = splitView(in: child) { return found }
+                    }
+                    return nil
+                }
+                splitView(in: root)?.setPosition(values[1], ofDividerAt: Int(values[0]))
+            case "winsize":
+                // `winsize <width> <height>`: resize the main window.
+                let size = arg.split(separator: " ").compactMap { Double($0) }
+                guard size.count == 2, let window = captureTarget(titleContaining: "Hachidori") else { break }
+                var frame = window.frame
+                frame.origin.y += frame.height - size[1]
+                frame.size = NSSize(width: size[0], height: size[1])
+                window.setFrame(frame, display: true)
             case "snapwin":
                 // `snapwin <file.png> <title>`: snapshot the window whose title contains <title>.
                 let args = arg.split(separator: " ", maxSplits: 1).map(String.init)
@@ -671,6 +704,30 @@ final class DevSnapshotDriver {
             default: break
             }
         }
+    }
+
+    /// Captures one of this app's own windows from the window server, which needs no
+    /// screen-recording permission. The function is looked up by name because the SDK
+    /// no longer declares it.
+    /// The window a `shot` names: the open sheet for "sheet", else the one whose title contains the text.
+    private func captureTarget(titleContaining title: String) -> NSWindow? {
+        title == "sheet"
+            ? NSApp.windows.first { $0.isSheet && $0.isVisible }
+            : NSApp.windows.first { $0.isVisible && !$0.isSheet && $0.title.contains(title) }
+    }
+
+    private func capture(to url: URL, titleContaining title: String) {
+        let window = captureTarget(titleContaining: title)
+        typealias CreateImage = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
+        guard let window,
+              let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGWindowListCreateImage") else { return }
+        let createImage = unsafeBitCast(symbol, to: CreateImage.self)
+        let onlyThisWindow: UInt32 = 1 << 3                 // kCGWindowListOptionIncludingWindow
+        let withoutShadowAtFullResolution: UInt32 = 1 | 8   // BoundsIgnoreFraming | BestResolution
+        guard let image = createImage(.null, onlyThisWindow, UInt32(window.windowNumber),
+                                      withoutShadowAtFullResolution)?.takeRetainedValue(),
+              let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else { return }
+        try? png.write(to: url)
     }
 
     private func snapshot(to url: URL, titleContaining title: String? = nil) {

@@ -70,6 +70,12 @@ struct RulesView: View {
             }
         }
         .frame(minWidth: 680, minHeight: 480)
+        #if DEBUG
+        // Under the snapshot driver, open on the first rule so the editor is in the picture.
+        .onAppear {
+            if CommandLine.arguments.contains("--snapshot-dir") { selection = model.overrideRules.first?.id }
+        }
+        #endif
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done") { dismiss() }
