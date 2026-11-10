@@ -18,6 +18,8 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-certificates.git", from: "1.5.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
         .package(url: "https://github.com/apple/swift-asn1.git", from: "1.0.0"),
+        // OpenAPI documents written in YAML
+        .package(url: "https://github.com/jpsim/Yams.git", from: "6.0.0"),
         // Phase 5 (persistence) will add:
         //   .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.29.0"),
     ],
@@ -42,6 +44,8 @@ let package = Package(
         ),
         // Checks GitHub Releases for a newer version and swaps it in on restart.
         .target(name: "Updater"),
+        // Reads OpenAPI documents and matches captured requests to their operations.
+        .target(name: "APIDocs", dependencies: [.product(name: "Yams", package: "Yams")]),
         .executableTarget(
             name: "HachidoriApp",
             dependencies: ["ProxyCore", "Updater"],
@@ -56,6 +60,7 @@ let package = Package(
             ]
         ),
         .testTarget(name: "UpdaterTests", dependencies: ["Updater"]),
+        .testTarget(name: "APIDocsTests", dependencies: ["APIDocs"]),
         .testTarget(
             name: "ProxyCoreTests",
             dependencies: [
