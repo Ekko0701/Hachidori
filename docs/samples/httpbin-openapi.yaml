@@ -1,0 +1,388 @@
+# A sample OpenAPI document for trying Hachidori's API Docs import.
+# It describes part of httpbin.org, a public echo service, so you can send real
+# requests through the proxy and see them matched:
+#
+#   curl -x http://127.0.0.1:9090 "https://httpbin.org/get?page=2&sort=name"
+#   curl -x http://127.0.0.1:9090 https://httpbin.org/status/404
+#   curl -x http://127.0.0.1:9090 -X POST https://httpbin.org/post \
+#        -H "Content-Type: application/json" -d '{"name": "Kim", "role": "admin"}'
+#
+# This is an unofficial description written for testing; httpbin.org publishes its own.
+openapi: 3.0.3
+info:
+  title: httpbin (sample)
+  version: 1.0.0
+  description: |
+    A small part of **httpbin.org**, described for testing Hachidori's API Docs.
+
+    Every endpoint echoes something about the request back, which makes it easy to
+    compare what was sent with what the document says.
+servers:
+  - url: https://httpbin.org
+    description: Public instance
+  - url: http://httpbin.org
+    description: Public instance, plain HTTP
+tags:
+  - name: Echo
+    description: Return what the request contained.
+  - name: Status
+    description: Answer with a status code you choose.
+  - name: Data
+    description: Return generated or fixed data.
+  - name: Timing
+    description: Answer slowly, for testing timeouts and the timing view.
+
+paths:
+  /get:
+    get:
+      tags: [Echo]
+      operationId: echoGet
+      summary: Echo a GET request
+      description: Returns the query parameters, headers and caller address of the request.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - name: sort
+          in: query
+          description: Field to sort by. httpbin ignores it; it is here to show an enum.
+          schema:
+            type: string
+            enum: [name, created, updated]
+            default: created
+        - $ref: '#/components/parameters/TraceID'
+      responses:
+        "200":
+          description: The request, echoed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Echo'
+              examples:
+                withQuery:
+                  summary: Called with ?page=2&sort=name
+                  value:
+                    args: {page: "2", sort: name}
+                    headers:
+                      Accept: "*/*"
+                      Host: httpbin.org
+                      User-Agent: curl/8.7.1
+                    origin: 203.0.113.7
+                    url: https://httpbin.org/get?page=2&sort=name
+
+  /post:
+    post:
+      tags: [Echo]
+      operationId: echoPost
+      summary: Echo a POST request
+      description: Returns the body it received, parsed as JSON or as a form when it can be.
+      parameters:
+        - $ref: '#/components/parameters/TraceID'
+      requestBody:
+        required: true
+        description: Anything. The examples use a small user object.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewUser'
+            example:
+              name: Kim
+              role: admin
+              tags: [early-access]
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+      responses:
+        "200":
+          description: The request, echoed with its body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EchoWithBody'
+
+  /anything/{path}:
+    parameters:
+      - name: path
+        in: path
+        description: Any single path segment; it comes back in `url`.
+        schema:
+          type: string
+        example: orders
+    put:
+      tags: [Echo]
+      operationId: echoAnythingPut
+      summary: Echo a PUT to any path
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewUser'
+      responses:
+        "200":
+          description: The request, echoed with its method.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EchoWithBody'
+    delete:
+      tags: [Echo]
+      operationId: echoAnythingDelete
+      summary: Echo a DELETE to any path
+      deprecated: true
+      responses:
+        "200":
+          description: The request, echoed with its method.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EchoWithBody'
+
+  /headers:
+    get:
+      tags: [Echo]
+      operationId: echoHeaders
+      summary: Echo the request headers
+      responses:
+        "200":
+          description: The headers httpbin received.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [headers]
+                properties:
+                  headers:
+                    $ref: '#/components/schemas/HeaderMap'
+
+  /status/{code}:
+    get:
+      tags: [Status]
+      operationId: getStatus
+      summary: Answer with the given status code
+      description: Useful for seeing how the list and the Docs tab show failures.
+      parameters:
+        - name: code
+          in: path
+          description: The status code to answer with.
+          schema:
+            type: integer
+            minimum: 100
+            maximum: 599
+          example: 404
+      responses:
+        "200":
+          description: Asked for 200.
+        "4XX":
+          $ref: '#/components/responses/EmptyError'
+        "5XX":
+          $ref: '#/components/responses/EmptyError'
+        default:
+          description: Any other code you asked for, with an empty body.
+
+  /uuid:
+    get:
+      tags: [Data]
+      operationId: getUUID
+      summary: Generate a UUID
+      responses:
+        "200":
+          description: A random version 4 UUID.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [uuid]
+                properties:
+                  uuid:
+                    type: string
+                    format: uuid
+                    example: 7f3c1c5e-9a52-4b1e-8e0a-2f4d6c8b9a10
+
+  /json:
+    get:
+      tags: [Data]
+      operationId: getSampleJSON
+      summary: Return a fixed JSON document
+      responses:
+        "200":
+          description: A sample slideshow.
+          headers:
+            Content-Length:
+              description: Size of the body in bytes.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlideshowDocument'
+
+  /delay/{seconds}:
+    get:
+      tags: [Timing]
+      operationId: getDelayed
+      summary: Answer after a delay
+      parameters:
+        - name: seconds
+          in: path
+          description: How long to wait. httpbin caps it at 10.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 10
+          example: 2
+      responses:
+        "200":
+          description: The request, echoed after the delay.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Echo'
+
+components:
+  parameters:
+    Page:
+      name: page
+      in: query
+      description: Page number. httpbin ignores it and echoes it back in `args`.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    TraceID:
+      name: X-Trace-Id
+      in: header
+      description: An ID of your choosing; it comes back in `headers`.
+      schema:
+        type: string
+        maxLength: 64
+      example: demo-123
+
+  responses:
+    EmptyError:
+      description: The error code you asked for, with an empty body.
+
+  schemas:
+    HeaderMap:
+      type: object
+      description: Header names and their values.
+      additionalProperties:
+        type: string
+      example:
+        Accept: "*/*"
+        Host: httpbin.org
+
+    Echo:
+      type: object
+      required: [args, headers, origin, url]
+      properties:
+        args:
+          type: object
+          description: The query parameters. Every value is a string.
+          additionalProperties:
+            type: string
+        headers:
+          $ref: '#/components/schemas/HeaderMap'
+        origin:
+          type: string
+          description: The caller's IP address.
+          example: 203.0.113.7
+        url:
+          type: string
+          format: uri
+          description: The full URL that was requested.
+
+    EchoWithBody:
+      description: An echo that also reports the method and the body.
+      allOf:
+        - $ref: '#/components/schemas/Echo'
+        - type: object
+          required: [data]
+          properties:
+            method:
+              type: string
+              description: Only `/anything` reports the method.
+              enum: [GET, POST, PUT, PATCH, DELETE]
+            data:
+              type: string
+              description: The raw body as text.
+            json:
+              description: The body parsed as JSON, or null when it wasn't JSON.
+              nullable: true
+              allOf:
+                - $ref: '#/components/schemas/NewUser'
+            form:
+              type: object
+              description: The body parsed as a form.
+              additionalProperties:
+                type: string
+            files:
+              type: object
+              additionalProperties:
+                type: string
+
+    NewUser:
+      type: object
+      required: [name]
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+        name:
+          type: string
+          minLength: 1
+          maxLength: 40
+        role:
+          $ref: '#/components/schemas/Role'
+        password:
+          type: string
+          writeOnly: true
+          minLength: 8
+        tags:
+          type: array
+          maxItems: 5
+          items:
+            type: string
+        manager:
+          description: Another user. Shows a schema that contains itself.
+          allOf:
+            - $ref: '#/components/schemas/NewUser'
+
+    Role:
+      type: string
+      enum: [admin, member, guest]
+      default: member
+
+    SlideshowDocument:
+      type: object
+      required: [slideshow]
+      properties:
+        slideshow:
+          type: object
+          required: [title, slides]
+          properties:
+            author:
+              type: string
+            date:
+              type: string
+            title:
+              type: string
+            slides:
+              type: array
+              items:
+                $ref: '#/components/schemas/Slide'
+
+    Slide:
+      type: object
+      required: [title, type]
+      properties:
+        title:
+          type: string
+        type:
+          type: string
+          enum: [all]
+        items:
+          type: array
+          description: Bullet points on the slide.
+          items:
+            type: string

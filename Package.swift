@@ -48,7 +48,7 @@ let package = Package(
         .target(name: "APIDocs", dependencies: [.product(name: "Yams", package: "Yams")]),
         .executableTarget(
             name: "HachidoriApp",
-            dependencies: ["ProxyCore", "Updater"],
+            dependencies: ["ProxyCore", "Updater", "APIDocs"],
             resources: [.copy("Resources/AppIcon.icns"), .copy("Resources/AppIcon-1024.png")],
             // SwiftPM records the deployment target (14.0) as the SDK version, so macOS 26
             // and later run the app in compatibility mode with the old toolbar, whose band

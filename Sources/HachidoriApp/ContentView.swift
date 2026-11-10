@@ -3,6 +3,8 @@ import ProxyCore
 
 struct ContentView: View {
     @Environment(AppModel.self) private var model
+    @Environment(APIDocsModel.self) private var docs
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         @Bindable var model = model
@@ -30,6 +32,24 @@ struct ContentView: View {
             if let pending = model.pausedItems.first {
                 BreakpointSheet(pending: pending).environment(model)
             }
+        }
+        // Dropping OpenAPI files on the window imports them.
+        .dropDestination(for: URL.self) { urls, _ in
+            let files = urls.filter { APIDocsModel.fileExtensions.contains($0.pathExtension.lowercased()) }
+            guard !files.isEmpty else { return false }
+            docs.importFiles(files)
+            return true
+        }
+        .onChange(of: docs.documentToOpen) { _, id in
+            guard let id else { return }
+            openWindow(id: APIDocBrowser.windowID, value: id)
+            docs.documentToOpen = nil
+        }
+        .alert("API Documents", isPresented: Binding(get: { docs.errorMessage != nil },
+                                                     set: { if !$0 { docs.errorMessage = nil } })) {
+            Button("OK") {}
+        } message: {
+            Text(docs.errorMessage ?? "")
         }
     }
 }
@@ -108,6 +128,7 @@ struct SidebarView: View {
                     }
                 }
             }
+            APIDocsSidebarSection()
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) {
@@ -120,6 +141,63 @@ struct SidebarView: View {
                 set: { expanded in
                     if expanded { collapsedDevices.remove(device) } else { collapsedDevices.insert(device) }
                 })
+    }
+}
+
+/// The imported OpenAPI documents. A row opens the document's browser window.
+private struct APIDocsSidebarSection: View {
+    @Environment(APIDocsModel.self) private var docs
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Section("API Docs") {
+            ForEach(docs.entries) { entry in
+                Button {
+                    openWindow(id: APIDocBrowser.windowID, value: entry.id)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: entry.loadError == nil ? "doc.text" : "exclamationmark.triangle")
+                            .foregroundStyle(entry.loadError == nil ? Color.secondary : Color.orange)
+                            .font(.caption)
+                            .frame(width: 14)
+                        Text(entry.record.title)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer(minLength: 4)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .badge(entry.document?.operations.count ?? 0)
+                .opacity(entry.record.isEnabled ? 1 : 0.5)
+                .help(help(for: entry))
+                .contextMenu {
+                    Button("Open") { openWindow(id: APIDocBrowser.windowID, value: entry.id) }
+                    Button(entry.record.isEnabled ? "Stop Matching Requests" : "Match Requests") {
+                        docs.setEnabled(entry.id, !entry.record.isEnabled)
+                    }
+                    Button("Reload from File") { docs.reload(entry.id) }
+                        .disabled(entry.record.originalPath == nil)
+                    Divider()
+                    Button("Remove", role: .destructive) { docs.remove(entry.id) }
+                }
+            }
+            Button {
+                docs.chooseFilesToImport()
+            } label: {
+                Label("Import OpenAPI…", systemImage: "plus")
+                    .foregroundStyle(.secondary)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Import an OpenAPI document (YAML or JSON). You can also drop the file on the window.")
+        }
+    }
+
+    private func help(for entry: APIDocsModel.Entry) -> String {
+        if let error = entry.loadError { return error }
+        if !entry.record.isEnabled { return "\(entry.record.title): not matched against requests" }
+        return "Open \(entry.record.title)"
     }
 }
 

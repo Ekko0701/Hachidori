@@ -19,6 +19,7 @@ struct HachidoriApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
     @State private var updater = UpdateController()
+    @State private var docs = APIDocsModel()
 
     #if DEBUG
     /// `Hachidori --record`: start the proxy immediately without touching the
@@ -40,6 +41,7 @@ struct HachidoriApp: App {
             ContentView()
                 .environment(model)
                 .environment(updater)
+                .environment(docs)
                 .frame(minWidth: 1100, minHeight: 600)
                 .onAppear {
                     updater.start()
@@ -50,14 +52,17 @@ struct HachidoriApp: App {
                         if let port = Self.devPort { model.listenPort = port }
                         model.startRecording()
                     }
-                    DevSnapshotDriver.startIfRequested(model: model)
+                    DevSnapshotDriver.startIfRequested(model: model, docs: docs)
                     #endif
                 }
         }
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified)
         .commands {
-            CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .newItem) {
+                Button("Import OpenAPI…") { docs.chooseFilesToImport() }
+                    .keyboardShortcut("i", modifiers: [.command, .shift])
+            }
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…") {
                     Task { await updater.check(userInitiated: true) }
@@ -65,6 +70,13 @@ struct HachidoriApp: App {
                 .disabled(!updater.canCheck)
             }
         }
+
+        // One window per imported API document, so it can sit beside the traffic.
+        WindowGroup("API Docs", id: APIDocBrowser.windowID, for: UUID.self) { $documentID in
+            APIDocBrowser(documentID: documentID)
+                .environment(docs)
+        }
+        .defaultSize(width: 1040, height: 720)
     }
 }
 
@@ -562,20 +574,22 @@ final class DevSnapshotDriver {
     private static var shared: DevSnapshotDriver?
     private let dir: URL
     private let model: AppModel
+    private let docs: APIDocsModel
     private var timer: Timer?
 
-    static func startIfRequested(model: AppModel) {
+    static func startIfRequested(model: AppModel, docs: APIDocsModel) {
         guard shared == nil,
               let i = CommandLine.arguments.firstIndex(of: "--snapshot-dir"),
               i + 1 < CommandLine.arguments.count else { return }
-        let driver = DevSnapshotDriver(dir: URL(fileURLWithPath: CommandLine.arguments[i + 1]), model: model)
+        let driver = DevSnapshotDriver(dir: URL(fileURLWithPath: CommandLine.arguments[i + 1]), model: model, docs: docs)
         driver.start()
         shared = driver
     }
 
-    private init(dir: URL, model: AppModel) {
+    private init(dir: URL, model: AppModel, docs: APIDocsModel) {
         self.dir = dir
         self.model = model
+        self.docs = docs
     }
 
     private func start() {
@@ -632,6 +646,19 @@ final class DevSnapshotDriver {
                    let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
                     try? png.write(to: dir.appendingPathComponent(arg))
                 }
+            case "importdoc":
+                // `importdoc <path>`: import an OpenAPI file, which also opens its browser window.
+                docs.importFiles([URL(fileURLWithPath: arg)])
+            case "docselect":
+                // `docselect GET /users/{id}`: select an operation in the open document browser.
+                NotificationCenter.default.post(name: .devSelectOperation, object: nil, userInfo: ["id": arg])
+            case "snapwin":
+                // `snapwin <file.png> <title>`: snapshot the window whose title contains <title>.
+                let args = arg.split(separator: " ", maxSplits: 1).map(String.init)
+                guard args.count == 2 else { break }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                    self?.snapshot(to: self!.dir.appendingPathComponent(args[0]), titleContaining: args[1])
+                }
             case "snap":
                 // Give SwiftUI a couple of frames to lay out before rendering.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
@@ -642,9 +669,15 @@ final class DevSnapshotDriver {
         }
     }
 
-    private func snapshot(to url: URL) {
-        // Prefer an open sheet (it is its own window), else the main window.
-        let window = NSApp.windows.first(where: { $0.isSheet && $0.isVisible })
+    private func snapshot(to url: URL, titleContaining title: String? = nil) {
+        // A named window, else an open sheet (it is its own window), else the main window.
+        let named = title.flatMap { title in
+            NSApp.windows.first { $0.isVisible && $0.contentView != nil && $0.title.contains(title) }
+        }
+        if title != nil, named == nil { return }
+        let window = named
+            ?? NSApp.windows.first(where: { $0.isSheet && $0.isVisible })
+            ?? NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil && $0.title == "Hachidori" })
             ?? NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil })
         guard let window,
               let view = window.contentView,
