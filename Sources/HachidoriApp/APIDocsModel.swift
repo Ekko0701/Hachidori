@@ -24,6 +24,9 @@ final class APIDocsModel {
     var errorMessage: String?
     /// Set after an import; the main window opens the browser for it and clears this.
     var documentToOpen: UUID?
+    /// An operation (`GET /users/{id}`) a document's browser should select, by document.
+    /// The browser clears its entry once it has shown the operation.
+    var operationToShow: [UUID: String] = [:]
 
     @ObservationIgnored private let library: DocLibrary
 

@@ -1,14 +1,16 @@
 import SwiftUI
 import ProxyCore
+import APIDocs
 
 enum InspectorTab: String, CaseIterable, Identifiable {
-    case overview, request, response, timing, messages
+    case overview, request, response, docs, timing, messages
     var id: String { rawValue }
     var title: String {
         switch self {
         case .overview: return "Overview"
         case .request: return "Request"
         case .response: return "Response"
+        case .docs: return "Docs"
         case .timing: return "Timing"
         case .messages: return "Messages"
         }
@@ -18,10 +20,16 @@ enum InspectorTab: String, CaseIterable, Identifiable {
 /// Right column: header strip + segmented tabs for one transaction.
 struct TransactionInspector: View {
     @Environment(AppModel.self) private var model
+    @Environment(APIDocsModel.self) private var docs
     let tx: CapturedTransaction
 
+    /// Whether an imported API document describes this request.
+    private var isDocumented: Bool { docs.match(tx) != nil }
+
     private var availableTabs: [InspectorTab] {
-        var tabs: [InspectorTab] = [.overview, .request, .response, .timing]
+        var tabs: [InspectorTab] = [.overview, .request, .response]
+        if isDocumented { tabs.append(.docs) }
+        tabs.append(.timing)
         if tx.isWebSocket { tabs.append(.messages) }
         return tabs
     }
@@ -47,6 +55,10 @@ struct TransactionInspector: View {
         .onChange(of: tx.isWebSocket, initial: true) { _, isWS in
             if model.inspectorTab == .messages && !isWS { model.inspectorTab = .response }
         }
+        // The Docs tab only exists for documented requests; leave it when this one has none.
+        .onChange(of: isDocumented, initial: true) { _, documented in
+            if model.inspectorTab == .docs && !documented { model.inspectorTab = .response }
+        }
     }
 
     @ViewBuilder
@@ -55,8 +67,52 @@ struct TransactionInspector: View {
         case .overview: OverviewPane(tx: tx)
         case .request: RequestPane(tx: tx)
         case .response: ResponsePane(tx: tx)
+        case .docs: DocsPane(tx: tx)
         case .timing: TimingPane(tx: tx)
         case .messages: WebSocketPane(tx: tx)
+        }
+    }
+}
+
+/// The documentation of the operation this request belongs to, with what the request
+/// actually sent shown beside each parameter and the received status marked.
+struct DocsPane: View {
+    @Environment(APIDocsModel.self) private var docs
+    @Environment(\.openWindow) private var openWindow
+    let tx: CapturedTransaction
+
+    var body: some View {
+        if let found = docs.match(tx), let document = found.entry.document {
+            let operation = found.match.operation
+            VStack(spacing: 0) {
+                HStack(spacing: 6) {
+                    Image(systemName: "doc.text").foregroundStyle(.secondary)
+                    Text(found.entry.record.title)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Button("Open in API Docs") {
+                        docs.operationToShow[found.entry.id] = operation.id
+                        openWindow(id: APIDocBrowser.windowID, value: found.entry.id)
+                    }
+                    .buttonStyle(.link)
+                }
+                .font(.caption)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                Divider()
+                OperationDocView(document: document, operation: operation,
+                                 actual: RequestValues(pathParameters: found.match.pathParameters,
+                                                       path: tx.path,
+                                                       headers: tx.requestHeaders.map { (name: $0.name, value: $0.value) },
+                                                       statusCode: tx.statusCode))
+                    // Start over for another request, and when the response arrives, so the
+                    // received status is the one that opens.
+                    .id("\(tx.id)-\(tx.statusCode ?? 0)")
+            }
+        } else {
+            ContentUnavailableView("No Documentation", systemImage: "doc.text",
+                                   description: Text("No imported API document describes this request."))
         }
     }
 }

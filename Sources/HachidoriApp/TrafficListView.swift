@@ -257,6 +257,7 @@ extension ToggleStyle where Self == FilterIconToggleStyle {
 
 struct TrafficTable: View {
     @Environment(AppModel.self) private var model
+    @Environment(APIDocsModel.self) private var docs
 
     var body: some View {
         @Bindable var model = model
@@ -317,6 +318,11 @@ struct TrafficTable: View {
             TableColumn("Path") { row in
                 if let tx = row.transaction {
                     HStack(spacing: 4) {
+                        if let found = docs.match(tx) {
+                            Image(systemName: "doc.text")
+                                .foregroundStyle(.secondary)
+                                .help("Documented in \(found.entry.record.title): \(found.match.operation.id)")
+                        }
                         if tx.wasOverridden {
                             Image(systemName: "pencil.circle.fill")
                                 .foregroundStyle(.orange)

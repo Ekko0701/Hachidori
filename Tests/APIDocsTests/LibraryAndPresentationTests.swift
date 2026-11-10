@@ -136,6 +136,45 @@ final class PresentationTests: XCTestCase {
     }
 }
 
+final class RequestValuesTests: XCTestCase {
+    private func parameter(_ name: String, _ location: Parameter.Location) -> Parameter {
+        Parameter(name: name, location: location, isRequired: false, isDeprecated: false,
+                  description: nil, schema: nil, example: nil)
+    }
+
+    func testReadsWhatTheRequestSent() {
+        let values = RequestValues(
+            pathParameters: ["id": "42"],
+            path: "/users/42?page=2&q=caf%C3%A9+au+lait&tag=a&tag=b&ids[]=1&ids[]=2&flag&=x#frag",
+            headers: [(name: "X-Trace-Id", value: "demo"), (name: "Accept", value: "a/b"),
+                      (name: "accept", value: "c/d"), (name: "Cookie", value: "session=abc=def; theme=dark;  ; bare")],
+            statusCode: 200)
+
+        XCTAssertEqual(values.value(for: parameter("id", .path)), "42")
+        XCTAssertEqual(values.value(for: parameter("page", .query)), "2")
+        XCTAssertEqual(values.value(for: parameter("q", .query)), "café au lait")
+        XCTAssertEqual(values.value(for: parameter("tag", .query)), "a, b")
+        XCTAssertEqual(values.value(for: parameter("ids", .query)), "1, 2")
+        XCTAssertEqual(values.value(for: parameter("flag", .query)), "")
+        XCTAssertNil(values.value(for: parameter("frag", .query)))
+        XCTAssertNil(values.value(for: parameter("missing", .query)))
+        XCTAssertEqual(values.value(for: parameter("x-trace-id", .header)), "demo")
+        XCTAssertEqual(values.value(for: parameter("Accept", .header)), "a/b, c/d")
+        XCTAssertEqual(values.value(for: parameter("session", .cookie)), "abc=def")
+        XCTAssertEqual(values.value(for: parameter("theme", .cookie)), "dark")
+        XCTAssertEqual(values.value(for: parameter("bare", .cookie)), "")
+        XCTAssertNil(values.value(for: parameter("other", .path)))
+        XCTAssertEqual(values.statusCode, 200)
+    }
+
+    func testAPathWithoutAQueryHasNoQueryValues() {
+        let values = RequestValues(pathParameters: [:], path: "/users", headers: [], statusCode: nil)
+        XCTAssertTrue(values.query.isEmpty)
+        XCTAssertTrue(values.cookies.isEmpty)
+        XCTAssertNil(values.statusCode)
+    }
+}
+
 final class DocLibraryTests: XCTestCase {
     private var directory: URL!
 

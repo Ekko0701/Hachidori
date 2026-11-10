@@ -6,6 +6,13 @@ import APIDocs
 struct OperationDocView: View {
     let document: APIDocument
     let operation: APIOperation
+    /// What a captured request sent and received. Nil in the document browser.
+    var actual: RequestValues?
+
+    /// The documented response the request's status falls under, when there is one.
+    private var receivedStatus: String? {
+        actual?.statusCode.flatMap { operation.response(forStatus: $0)?.status }
+    }
 
     private static let locations: [(Parameter.Location, String)] = [
         (.path, "Path"), (.query, "Query"), (.header, "Header"), (.cookie, "Cookie"),
@@ -20,7 +27,7 @@ struct OperationDocView: View {
                         ForEach(Self.locations, id: \.0) { location, title in
                             let parameters = operation.parameters.filter { $0.location == location }
                             if !parameters.isEmpty {
-                                ParameterTable(document: document, title: title, parameters: parameters)
+                                ParameterTable(document: document, title: title, parameters: parameters, actual: actual)
                             }
                         }
                     }
@@ -35,9 +42,18 @@ struct OperationDocView: View {
                 }
                 if !operation.responses.isEmpty {
                     DocSection("Responses") {
+                        if let status = actual?.statusCode, receivedStatus == nil {
+                            Label("This request got \(status), which the document doesn't list.",
+                                  systemImage: "exclamationmark.triangle")
+                                .font(.callout)
+                                .foregroundStyle(.orange)
+                        }
                         ForEach(operation.responses, id: \.status) { response in
+                            // With a received status, open that response; otherwise the successful ones.
                             ResponseBlock(document: document, response: response,
-                                          startsExpanded: response.status.hasPrefix("2") || operation.responses.count == 1)
+                                          isReceived: response.status == receivedStatus,
+                                          startsExpanded: receivedStatus.map { $0 == response.status }
+                                              ?? (response.status.hasPrefix("2") || operation.responses.count == 1))
                         }
                     }
                 }
@@ -170,6 +186,7 @@ private struct ParameterTable: View {
     let document: APIDocument
     let title: String
     let parameters: [Parameter]
+    let actual: RequestValues?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -190,6 +207,7 @@ private struct ParameterTable: View {
                         }
                         SchemaDetails(document: document, description: parameter.description,
                                       schema: parameter.schema, example: parameter.example)
+                        if let actual { SentValue(value: actual.value(for: parameter), isRequired: parameter.isRequired) }
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
@@ -199,6 +217,28 @@ private struct ParameterTable: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.quaternary))
+        }
+    }
+}
+
+/// What the captured request sent for a parameter.
+private struct SentValue: View {
+    let value: String?
+    let isRequired: Bool
+
+    var body: some View {
+        if let value {
+            (Text("Sent: ").foregroundStyle(.secondary)
+                + Text(value.isEmpty ? "(empty)" : value).font(.caption.monospaced().weight(.semibold)).foregroundStyle(Color.accentColor))
+                .font(.caption)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        } else if isRequired {
+            Label("Not sent, though the document requires it", systemImage: "exclamationmark.triangle")
+                .font(.caption)
+                .foregroundStyle(.orange)
+        } else {
+            Text("Not sent").font(.caption).foregroundStyle(.tertiary)
         }
     }
 }
@@ -277,11 +317,14 @@ private struct ExampleBlock: View {
 private struct ResponseBlock: View {
     let document: APIDocument
     let response: Response
+    /// Whether this is the response the captured request got.
+    let isReceived: Bool
     @State private var isExpanded: Bool
 
-    init(document: APIDocument, response: Response, startsExpanded: Bool) {
+    init(document: APIDocument, response: Response, isReceived: Bool, startsExpanded: Bool) {
         self.document = document
         self.response = response
+        self.isReceived = isReceived
         _isExpanded = State(initialValue: startsExpanded)
     }
 
@@ -311,6 +354,7 @@ private struct ResponseBlock: View {
                     if let description = response.description {
                         Text(description).font(.callout).multilineTextAlignment(.leading)
                     }
+                    if isReceived { DocTag("received", color: .accentColor) }
                     Spacer(minLength: 0)
                 }
                 .contentShape(Rectangle())
@@ -344,6 +388,11 @@ private struct ResponseBlock: View {
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(nsColor: .quaternarySystemFill).opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
+        .overlay {
+            if isReceived {
+                RoundedRectangle(cornerRadius: 6).strokeBorder(Color.accentColor.opacity(0.6))
+            }
+        }
     }
 }
 

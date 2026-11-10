@@ -74,17 +74,29 @@ struct APIDocBrowser: View {
         }
         .navigationTitle(document.title)
         .navigationSubtitle(Self.subtitle(document))
+        // The inspector's "Open in API Docs" asks for an operation; show it, here or on opening.
+        .onChange(of: docs.operationToShow[entry.id], initial: true) { _, id in
+            guard let id else { return }
+            select(operationID: id, in: document)
+            docs.operationToShow[entry.id] = nil
+        }
         #if DEBUG
         .onReceive(NotificationCenter.default.publisher(for: .devSelectOperation)) { note in
             guard let id = note.userInfo?["id"] as? String else { return }
-            if let group = document.operationGroups().first(where: { $0.operations.contains { $0.id == id } }),
-               let operation = group.operations.first(where: { $0.id == id }) {
-                selection = Self.rowID(group: group.name, operation: operation)
-            } else {
-                selection = Self.overviewID
-            }
+            select(operationID: id, in: document)
         }
         #endif
+    }
+
+    private func select(operationID id: String, in document: APIDocument) {
+        // Clear the filter first, or the operation's row may not be in the list.
+        search = ""
+        if let group = document.operationGroups().first(where: { $0.operations.contains { $0.id == id } }),
+           let operation = group.operations.first(where: { $0.id == id }) {
+            selection = Self.rowID(group: group.name, operation: operation)
+        } else {
+            selection = Self.overviewID
+        }
     }
 
     // An operation with several tags has a row under each, so the row's identity includes the tag.
