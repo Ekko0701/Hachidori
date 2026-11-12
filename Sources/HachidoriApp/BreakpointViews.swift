@@ -97,6 +97,8 @@ struct BreakpointRequestEditor: View {
     @State private var headers: [HeaderKV] = []
     @State private var bodyText = ""
     @State private var bodyIsText = true
+    /// Whether the original body was text; a binary one can still be replaced by typed text.
+    @State private var bodyWasText = true
     @State private var replacement: BodyReplacement?
 
     var body: some View {
@@ -108,7 +110,8 @@ struct BreakpointRequestEditor: View {
                 Section("Method") { TextField("Method", text: $method) }
                 Section("Headers") { HeaderRowsEditor(headers: $headers) }
                 Section("Body") {
-                    BodyEditor(text: $bodyText, isText: bodyIsText, byteCount: request.body.count,
+                    BodyEditor(text: $bodyText, isText: $bodyIsText, originallyText: bodyWasText,
+                               byteCount: request.body.count,
                                minHeight: 140, replacement: $replacement, headers: $headers)
                 }
             }
@@ -136,13 +139,15 @@ struct BreakpointRequestEditor: View {
         headers = request.headers.map { HeaderKV(name: $0.name, value: $0.value) }
         let text = BodyText.decode(request.body, contentType: request.headers.contentType)
         bodyIsText = text != nil
+        bodyWasText = bodyIsText
         bodyText = text ?? ""
         replacement = nil
     }
     private func edited() -> EditedRequest {
         var pairs = headers.map { HeaderPair(name: $0.name, value: $0.value) }
         let body = replacement?.data
-            ?? (bodyIsText ? pairs.encodeBody(bodyText, originalBody: request.body) : request.body)
+            ?? (bodyIsText ? pairs.encodeBody(bodyText, originalBody: bodyWasText ? request.body : Data())
+                           : request.body)
         return EditedRequest(method: method, headers: pairs, body: body)
     }
 }
@@ -158,6 +163,8 @@ struct BreakpointResponseEditor: View {
     @State private var headers: [HeaderKV] = []
     @State private var bodyText = ""
     @State private var bodyIsText = true
+    /// Whether the original body was text; a binary one can still be replaced by typed text.
+    @State private var bodyWasText = true
     @State private var replacement: BodyReplacement?
 
     var body: some View {
@@ -169,7 +176,8 @@ struct BreakpointResponseEditor: View {
                 Section("Status") { TextField("Status code", value: $statusCode, format: .number) }
                 Section("Headers") { HeaderRowsEditor(headers: $headers) }
                 Section("Body") {
-                    BodyEditor(text: $bodyText, isText: bodyIsText, byteCount: response.body.count,
+                    BodyEditor(text: $bodyText, isText: $bodyIsText, originallyText: bodyWasText,
+                               byteCount: response.body.count,
                                minHeight: 160, replacement: $replacement, headers: $headers)
                 }
             }
@@ -197,13 +205,15 @@ struct BreakpointResponseEditor: View {
         headers = response.headers.map { HeaderKV(name: $0.name, value: $0.value) }
         let text = BodyText.decode(response.body, contentType: response.headers.contentType)
         bodyIsText = text != nil
+        bodyWasText = bodyIsText
         bodyText = text ?? ""
         replacement = nil
     }
     private func edited() -> EditedResponse {
         var pairs = headers.map { HeaderPair(name: $0.name, value: $0.value) }
         let body = replacement?.data
-            ?? (bodyIsText ? pairs.encodeBody(bodyText, originalBody: response.body) : response.body)
+            ?? (bodyIsText ? pairs.encodeBody(bodyText, originalBody: bodyWasText ? response.body : Data())
+                           : response.body)
         return EditedResponse(statusCode: statusCode, headers: pairs, body: body)
     }
 }
@@ -216,11 +226,12 @@ struct BodyReplacement: Equatable {
     let data: Data
 }
 
-/// Text editor for a paused body. Binary bodies cannot be edited as text, but any body
-/// can be replaced with a file's bytes.
+/// Text editor for a paused body. A binary body cannot be edited as text, but it can be
+/// replaced with typed text, and any body can be replaced with a file's bytes.
 private struct BodyEditor: View {
     @Binding var text: String
-    let isText: Bool
+    @Binding var isText: Bool
+    let originallyText: Bool
     let byteCount: Int
     let minHeight: CGFloat
     @Binding var replacement: BodyReplacement?
@@ -239,13 +250,32 @@ private struct BodyEditor: View {
                 Button("Revert") { self.replacement = nil }
             }
         } else if isText {
+            if !originallyText {
+                HStack {
+                    Label("Replacing the binary body (\(Format.bytes(byteCount))) with this text",
+                          systemImage: "character.cursor.ibeam")
+                        .font(.callout).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Revert") {
+                        isText = false
+                        text = ""
+                    }
+                }
+            }
             TextEditor(text: $text).font(.callout.monospaced()).frame(minHeight: minHeight)
         } else {
-            Label("Binary body (\(Format.bytes(byteCount))). Replace it with a file to change it.",
+            Label("Binary body (\(Format.bytes(byteCount))). Replace it with text or a file to change it.",
                   systemImage: "doc.zipper")
                 .font(.callout).foregroundStyle(.secondary)
         }
         HStack {
+            if !isText && replacement == nil {
+                Button {
+                    text = ""
+                    isText = true
+                    dropContentEncoding()
+                } label: { Label("Replace with Text", systemImage: "character.cursor.ibeam") }
+            }
             Button {
                 choosingFile = true
             } label: { Label(replacement == nil ? "Replace with File…" : "Choose Another File…",
@@ -269,11 +299,16 @@ private struct BodyEditor: View {
         }
     }
 
+    /// A replacement body is sent uncompressed, so the original's compression header no longer applies.
+    private func dropContentEncoding() {
+        headers.removeAll { $0.name.lowercased() == "content-encoding" }
+    }
+
     /// The file's bytes go out as they are: drop a compression header that no longer
     /// applies, and label them with the file's type when macOS knows it. Both stay
     /// editable in the header rows above.
     private func adjustHeaders(for url: URL) {
-        headers.removeAll { $0.name.lowercased() == "content-encoding" }
+        dropContentEncoding()
         guard let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType else { return }
         if let i = headers.firstIndex(where: { $0.name.lowercased() == "content-type" }) {
             headers[i].value = mime

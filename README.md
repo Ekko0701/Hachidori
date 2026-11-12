@@ -153,8 +153,9 @@ the status code, the body or headers, or answer locally without contacting the s
 toolbar, choose to pause requests, responses or both, and optionally limit them to URLs
 containing some text. A paused request or response opens in an editor; press **Send** to
 let it continue with your changes, or **Abort** to drop the connection. Text bodies are
-edited in place. Any body, including a file download or an image, can be swapped for a
-file on your Mac with **Replace with File…**.
+edited in place. A binary body, such as a file download or an image, can be swapped for
+text you type with **Replace with Text**, and any body for a file on your Mac with
+**Replace with File…**.
 
 Rules and the breakpoint URL filter are saved between launches. The breakpoint switches
 always start off, so traffic never pauses until you turn them on.
