@@ -618,6 +618,12 @@ final class DevSnapshotDriver {
             case "client": model.clientFilter = (arg == "all") ? nil : arg
             case "search": model.searchText = arg
             case "statustext": model.statusText = arg
+            case "bp":
+                // `bp requests|responses|off [url-contains]`
+                let parts = arg.split(separator: " ", maxSplits: 1).map(String.init)
+                model.breakpointRequestsEnabled = parts.first == "requests"
+                model.breakpointResponsesEnabled = parts.first == "responses"
+                model.breakpointURLContains = parts.count > 1 ? parts[1] : ""
             case "snapview":
                 // `snapview cert|breakpoints <file.png>`: render a popover's content at its
                 // ideal size (the same sizing a popover uses) without opening it.

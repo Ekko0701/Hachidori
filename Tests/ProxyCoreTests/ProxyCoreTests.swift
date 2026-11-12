@@ -1,4 +1,5 @@
 import XCTest
+import NIOHTTP1
 @testable import ProxyCore
 
 final class ProxyCoreTests: XCTestCase {
@@ -75,5 +76,25 @@ final class ProxyCoreTests: XCTestCase {
         XCTAssertEqual(ClientDevice.kind(forUserAgents: ["Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)"]), .mac)
         XCTAssertEqual(ClientDevice.kind(forUserAgents: ["curl/8.4.0"]), .unknown)
         XCTAssertEqual(ClientDevice.kind(forUserAgents: [String]()), .unknown)
+    }
+
+    func testEditedRequestHeadersReframeTheBody() {
+        let pairs = [HeaderPair(name: "Content-Type", value: "application/pdf"),
+                     HeaderPair(name: "Content-Length", value: "5"),
+                     HeaderPair(name: "Transfer-Encoding", value: "chunked"),
+                     HeaderPair(name: "", value: "dropped")]
+        let headers = RequestForwarder.editedRequestHeaders(pairs, bodyCount: 2048, host: "example.com")
+        XCTAssertEqual(headers[canonicalForm: "Content-Length"], ["2048"])
+        XCTAssertTrue(headers[canonicalForm: "Transfer-Encoding"].isEmpty)
+        XCTAssertEqual(headers.first(name: "Content-Type"), "application/pdf")
+        XCTAssertEqual(headers.first(name: "Host"), "example.com")
+        XCTAssertEqual(headers.count, 3)
+    }
+
+    func testEditedRequestHeadersLeaveABodylessGetUnframed() {
+        let headers = RequestForwarder.editedRequestHeaders([HeaderPair(name: "Host", value: "a.test")],
+                                                       bodyCount: 0, host: "ignored.test")
+        XCTAssertNil(headers.first(name: "Content-Length"))
+        XCTAssertEqual(headers.first(name: "Host"), "a.test")
     }
 }

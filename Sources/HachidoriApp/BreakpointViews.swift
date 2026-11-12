@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import ProxyCore
 
 /// Popover to enable request/response breakpoints and set which URLs to pause.
@@ -69,8 +70,12 @@ private struct HeaderRowsEditor: View {
     var body: some View {
         ForEach($headers) { $header in
             HStack {
-                TextField("Name", text: $header.name)
-                TextField("Value", text: $header.value)
+                // In a grouped Form a TextField shows its title as a leading label and
+                // right-aligns the text; hide the label so each row reads as name | value.
+                TextField("Name", text: $header.name, prompt: Text("Name"))
+                    .labelsHidden()
+                TextField("Value", text: $header.value, prompt: Text("Value"))
+                    .labelsHidden()
                 Button(role: .destructive) {
                     headers.removeAll { $0.id == header.id }
                 } label: { Image(systemName: "minus.circle") }
@@ -92,6 +97,7 @@ struct BreakpointRequestEditor: View {
     @State private var headers: [HeaderKV] = []
     @State private var bodyText = ""
     @State private var bodyIsText = true
+    @State private var replacement: BodyReplacement?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -102,7 +108,8 @@ struct BreakpointRequestEditor: View {
                 Section("Method") { TextField("Method", text: $method) }
                 Section("Headers") { HeaderRowsEditor(headers: $headers) }
                 Section("Body") {
-                    BodyEditor(text: $bodyText, isText: bodyIsText, byteCount: request.body.count, minHeight: 140)
+                    BodyEditor(text: $bodyText, isText: bodyIsText, byteCount: request.body.count,
+                               minHeight: 140, replacement: $replacement, headers: $headers)
                 }
             }
             .formStyle(.grouped)
@@ -130,10 +137,12 @@ struct BreakpointRequestEditor: View {
         let text = BodyText.decode(request.body, contentType: request.headers.contentType)
         bodyIsText = text != nil
         bodyText = text ?? ""
+        replacement = nil
     }
     private func edited() -> EditedRequest {
         var pairs = headers.map { HeaderPair(name: $0.name, value: $0.value) }
-        let body = bodyIsText ? pairs.encodeBody(bodyText, originalBody: request.body) : request.body
+        let body = replacement?.data
+            ?? (bodyIsText ? pairs.encodeBody(bodyText, originalBody: request.body) : request.body)
         return EditedRequest(method: method, headers: pairs, body: body)
     }
 }
@@ -149,6 +158,7 @@ struct BreakpointResponseEditor: View {
     @State private var headers: [HeaderKV] = []
     @State private var bodyText = ""
     @State private var bodyIsText = true
+    @State private var replacement: BodyReplacement?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -159,7 +169,8 @@ struct BreakpointResponseEditor: View {
                 Section("Status") { TextField("Status code", value: $statusCode, format: .number) }
                 Section("Headers") { HeaderRowsEditor(headers: $headers) }
                 Section("Body") {
-                    BodyEditor(text: $bodyText, isText: bodyIsText, byteCount: response.body.count, minHeight: 160)
+                    BodyEditor(text: $bodyText, isText: bodyIsText, byteCount: response.body.count,
+                               minHeight: 160, replacement: $replacement, headers: $headers)
                 }
             }
             .formStyle(.grouped)
@@ -187,29 +198,87 @@ struct BreakpointResponseEditor: View {
         let text = BodyText.decode(response.body, contentType: response.headers.contentType)
         bodyIsText = text != nil
         bodyText = text ?? ""
+        replacement = nil
     }
     private func edited() -> EditedResponse {
         var pairs = headers.map { HeaderPair(name: $0.name, value: $0.value) }
-        let body = bodyIsText ? pairs.encodeBody(bodyText, originalBody: response.body) : response.body
+        let body = replacement?.data
+            ?? (bodyIsText ? pairs.encodeBody(bodyText, originalBody: response.body) : response.body)
         return EditedResponse(statusCode: statusCode, headers: pairs, body: body)
     }
 }
 
 // MARK: - Body editing helpers
 
-/// Text editor for a paused body; binary bodies are left untouched and sent as-is.
+/// A file chosen to be sent in place of a paused body.
+struct BodyReplacement: Equatable {
+    let fileName: String
+    let data: Data
+}
+
+/// Text editor for a paused body. Binary bodies cannot be edited as text, but any body
+/// can be replaced with a file's bytes.
 private struct BodyEditor: View {
     @Binding var text: String
     let isText: Bool
     let byteCount: Int
     let minHeight: CGFloat
+    @Binding var replacement: BodyReplacement?
+    @Binding var headers: [HeaderKV]
+
+    @State private var choosingFile = false
+    @State private var readError: String?
 
     var body: some View {
-        if isText {
+        if let replacement {
+            HStack {
+                Label("Replaced with \(replacement.fileName) (\(Format.bytes(replacement.data.count)))",
+                      systemImage: "doc.fill")
+                    .font(.callout)
+                Spacer()
+                Button("Revert") { self.replacement = nil }
+            }
+        } else if isText {
             TextEditor(text: $text).font(.callout.monospaced()).frame(minHeight: minHeight)
         } else {
-            Label("Binary body (\(Format.bytes(byteCount))) — sent unchanged.", systemImage: "doc.zipper")
+            Label("Binary body (\(Format.bytes(byteCount))). Replace it with a file to change it.",
+                  systemImage: "doc.zipper")
                 .font(.callout).foregroundStyle(.secondary)
+        }
+        HStack {
+            Button {
+                choosingFile = true
+            } label: { Label(replacement == nil ? "Replace with File…" : "Choose Another File…",
+                             systemImage: "doc.badge.arrow.up") }
+            if let readError {
+                Text(readError).font(.caption).foregroundStyle(.red)
+            }
+        }
+        .fileImporter(isPresented: $choosingFile, allowedContentTypes: [.item]) { result in
+            guard case .success(let url) = result else { return }
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let data = try Data(contentsOf: url)
+                replacement = BodyReplacement(fileName: url.lastPathComponent, data: data)
+                readError = nil
+                adjustHeaders(for: url)
+            } catch {
+                readError = "Couldn't read \(url.lastPathComponent): \(error.localizedDescription)"
+            }
+        }
+    }
+
+    /// The file's bytes go out as they are: drop a compression header that no longer
+    /// applies, and label them with the file's type when macOS knows it. Both stay
+    /// editable in the header rows above.
+    private func adjustHeaders(for url: URL) {
+        headers.removeAll { $0.name.lowercased() == "content-encoding" }
+        guard let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType else { return }
+        if let i = headers.firstIndex(where: { $0.name.lowercased() == "content-type" }) {
+            headers[i].value = mime
+        } else {
+            headers.append(HeaderKV(name: "Content-Type", value: mime))
         }
     }
 }

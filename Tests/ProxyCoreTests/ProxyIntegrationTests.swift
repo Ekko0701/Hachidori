@@ -256,6 +256,77 @@ final class ProxyIntegrationTests: XCTestCase {
         XCTAssertNil(response.headers.first(name: "Content-Encoding"))
     }
 
+    /// A file swapped in at a response breakpoint reaches the client byte for byte.
+    func testResponseBreakpointSendsReplacementBinaryBody() throws {
+        let group = MultiThreadedEventLoopGroup(numberOfThreads: 2)
+        defer { try? group.syncShutdownGracefully() }
+        let origin = try startOrigin(group: group)
+        defer { try? origin.close().wait() }
+        let originPort = try XCTUnwrap(origin.localAddress?.port)
+
+        // Not valid UTF-8, and longer than the origin's body.
+        let file = Data((0..<4096).map { UInt8(truncatingIfNeeded: $0 &* 37 &+ 0x80) })
+        let breakpoints = BreakpointController()
+        breakpoints.configure(requestsEnabled: false, responsesEnabled: true, urlContains: "/hello")
+        let consumer = Task {
+            for await pending in breakpoints.pending {
+                if case .response(let paused, let resume) = pending.kind {
+                    var headers = paused.headers.filter { $0.name.lowercased() != "content-type" }
+                    headers.append(HeaderPair(name: "Content-Type", value: "application/octet-stream"))
+                    resume(.send(EditedResponse(statusCode: paused.statusCode, headers: headers, body: file)))
+                }
+            }
+        }
+        defer { consumer.cancel() }
+
+        let proxy = ProxyServer(port: 0, breakpoints: breakpoints) { _ in }
+        try proxy.start()
+        defer { proxy.shutdown() }
+        let proxyPort = try XCTUnwrap(proxy.boundPort)
+
+        let host = "127.0.0.1:\(originPort)"
+        let response = try fetchThroughProxyDetailed(proxyPort: proxyPort, absoluteURL: "http://\(host)/hello",
+                                                     host: host, group: group)
+        XCTAssertEqual(response.status, 200)
+        XCTAssertEqual(response.bodyData, file)
+        XCTAssertEqual(response.headers.first(name: "Content-Length"), String(file.count))
+        XCTAssertEqual(response.headers.first(name: "Content-Type"), "application/octet-stream")
+    }
+
+    /// A request body changed at a breakpoint is framed by its new length, so the origin
+    /// reads all of it instead of stopping at the original Content-Length.
+    func testRequestBreakpointReframesReplacementBody() throws {
+        let group = MultiThreadedEventLoopGroup(numberOfThreads: 2)
+        defer { try? group.syncShutdownGracefully() }
+        let origin = try startOrigin(group: group)
+        defer { try? origin.close().wait() }
+        let originPort = try XCTUnwrap(origin.localAddress?.port)
+
+        let replacement = Data(repeating: 0xFF, count: 10_000)
+        let breakpoints = BreakpointController()
+        breakpoints.configure(requestsEnabled: true, responsesEnabled: false, urlContains: "/upload")
+        let consumer = Task {
+            for await pending in breakpoints.pending {
+                if case .request(let paused, let resume) = pending.kind {
+                    resume(.proceed(EditedRequest(method: paused.method, headers: paused.headers, body: replacement)))
+                }
+            }
+        }
+        defer { consumer.cancel() }
+
+        let proxy = ProxyServer(port: 0, breakpoints: breakpoints) { _ in }
+        try proxy.start()
+        defer { proxy.shutdown() }
+        let proxyPort = try XCTUnwrap(proxy.boundPort)
+
+        let host = "127.0.0.1:\(originPort)"
+        let response = try fetchThroughProxyDetailed(proxyPort: proxyPort, absoluteURL: "http://\(host)/upload",
+                                                     host: host, method: .POST, body: Data("small".utf8),
+                                                     group: group)
+        XCTAssertEqual(response.status, 200)
+        XCTAssertEqual(response.headers.first(name: "X-Echo-Body-Length"), String(replacement.count))
+    }
+
     // MARK: - Helpers
 
     private func waitForCapture(_ box: CaptureBox, timeout: TimeInterval = 2) throws -> CapturedTransaction {
@@ -391,6 +462,8 @@ final class ProxyIntegrationTests: XCTestCase {
     private func fetchThroughProxyDetailed(proxyPort: Int,
                                            absoluteURL: String,
                                            host: String,
+                                           method: HTTPMethod = .GET,
+                                           body: Data? = nil,
                                            group: EventLoopGroup) throws -> ClientResponse {
         let promise = group.next().makePromise(of: ClientResponse.self)
         let bootstrap = ClientBootstrap(group: group)
@@ -400,9 +473,15 @@ final class ProxyIntegrationTests: XCTestCase {
                 }
             }
         let channel = try bootstrap.connect(host: "127.0.0.1", port: proxyPort).wait()
-        var head = HTTPRequestHead(version: .http1_1, method: .GET, uri: absoluteURL)
+        var head = HTTPRequestHead(version: .http1_1, method: method, uri: absoluteURL)
         head.headers.add(name: "Host", value: host)
+        if let body { head.headers.add(name: "Content-Length", value: String(body.count)) }
         channel.write(HTTPClientRequestPart.head(head), promise: nil)
+        if let body {
+            var buffer = channel.allocator.buffer(capacity: body.count)
+            buffer.writeBytes(body)
+            channel.write(HTTPClientRequestPart.body(.byteBuffer(buffer)), promise: nil)
+        }
         channel.writeAndFlush(HTTPClientRequestPart.end(nil), promise: nil)
         return try promise.futureResult.wait()
     }
@@ -413,7 +492,8 @@ final class ProxyIntegrationTests: XCTestCase {
 struct ClientResponse {
     var status: Int
     var headers: HTTPHeaders
-    var body: String
+    var bodyData: Data
+    var body: String { String(decoding: bodyData, as: UTF8.self) }
 }
 
 private final class PausedBox: @unchecked Sendable {
@@ -435,13 +515,15 @@ private final class OriginHandler: ChannelInboundHandler {
     typealias OutboundOut = HTTPServerResponsePart
 
     private var path = "/"
+    private var receivedBody = 0
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         switch unwrapInboundIn(data) {
         case .head(let head):
             path = head.uri
-        case .body:
-            break
+            receivedBody = 0
+        case .body(let chunk):
+            receivedBody += chunk.readableBytes
         case .end:
             let bodyText = "hello from origin"
             var headers = HTTPHeaders()
@@ -458,6 +540,7 @@ private final class OriginHandler: ChannelInboundHandler {
             headers.add(name: "Content-Length", value: String(buffer.readableBytes))
             headers.add(name: "Content-Type", value: "text/plain")
             headers.add(name: "X-Echo-Path", value: path)
+            headers.add(name: "X-Echo-Body-Length", value: String(receivedBody))
             let responseHead = HTTPResponseHead(version: .http1_1, status: .ok, headers: headers)
             context.write(wrapOutboundOut(.head(responseHead)), promise: nil)
             context.write(wrapOutboundOut(.body(.byteBuffer(buffer))), promise: nil)
@@ -472,7 +555,7 @@ private final class ClientResponseCollector: ChannelInboundHandler {
     private let promise: EventLoopPromise<ClientResponse>
     private var status = 0
     private var headers = HTTPHeaders()
-    private var body = ""
+    private var body = Data()
     private var done = false
 
     init(promise: EventLoopPromise<ClientResponse>) {
@@ -485,10 +568,10 @@ private final class ClientResponseCollector: ChannelInboundHandler {
             status = Int(head.status.code)
             headers = head.headers
         case .body(var chunk):
-            body += chunk.readString(length: chunk.readableBytes) ?? ""
+            body.append(contentsOf: chunk.readBytes(length: chunk.readableBytes) ?? [])
         case .end:
             done = true
-            promise.succeed(ClientResponse(status: status, headers: headers, body: body))
+            promise.succeed(ClientResponse(status: status, headers: headers, bodyData: body))
             context.close(promise: nil)
         }
     }

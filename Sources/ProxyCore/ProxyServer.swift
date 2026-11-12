@@ -555,13 +555,7 @@ enum RequestForwarder {
                     inbound.close(promise: nil)
                 case .proceed(let edited):
                     if let edited {
-                        var headers = HTTPHeaders()
-                        for pair in edited.headers where !pair.name.isEmpty {
-                            headers.add(name: pair.name, value: pair.value)
-                        }
-                        if headers.first(name: "Host") == nil {
-                            headers.add(name: "Host", value: host)
-                        }
+                        let headers = editedRequestHeaders(edited.headers, bodyCount: edited.body.count, host: host)
                         var buffer = inbound.allocator.buffer(capacity: edited.body.count)
                         buffer.writeBytes(edited.body)
                         proceed(reqMethod: httpMethod(from: edited.method), reqHeaders: headers, reqBody: buffer)
@@ -656,6 +650,29 @@ enum RequestForwarder {
         var headers = response.head.headers
         headers.remove(name: "Content-Encoding")
         return (headerPairs(headers), decoded)
+    }
+
+    /// Headers for a request edited at a breakpoint. The body may have changed length
+    /// (edited text, or a file swapped in), so the original framing headers are dropped
+    /// and `Content-Length` is set from the body that is actually sent.
+    static func editedRequestHeaders(_ pairs: [HeaderPair], bodyCount: Int, host: String) -> HTTPHeaders {
+        var headers = HTTPHeaders()
+        var hadBodyFraming = false
+        for pair in pairs where !pair.name.isEmpty {
+            let name = pair.name.lowercased()
+            if name == "content-length" || name == "transfer-encoding" {
+                hadBodyFraming = true
+                continue
+            }
+            headers.add(name: pair.name, value: pair.value)
+        }
+        if bodyCount > 0 || hadBodyFraming {
+            headers.add(name: "Content-Length", value: String(bodyCount))
+        }
+        if headers.first(name: "Host") == nil {
+            headers.add(name: "Host", value: host)
+        }
+        return headers
     }
 
     /// Build a response from a user-edited breakpoint result.
