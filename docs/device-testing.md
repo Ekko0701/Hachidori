@@ -11,10 +11,8 @@
 
 ## 1. Mac 쪽 준비 (한 번만)
 
-```bash
-cd ~/Developer/personal/Hachidori
-swift run Hachidori
-```
+[Releases](https://github.com/Ekko0701/Hachidori/releases/latest)에서 `Hachidori-<버전>.dmg`를 받아 응용 프로그램에
+설치하고 실행합니다. 소스에서 직접 띄우려면 저장소에서 `swift run Hachidori`를 실행합니다.
 
 1. 툴바 오른쪽 **Certificate**(자물쇠) 버튼을 누릅니다.
 2. **Auto-configure macOS system proxy**는 꺼도 됩니다. Mac 자신의 트래픽까지 잡을 필요가 없으면
@@ -115,7 +113,7 @@ WebView 페이지 호스트가 자물쇠 아이콘(HTTPS)과 함께 나타나고
   `/v1/members/me`처럼 경로를 넣으면 됩니다. 비워 두면 모든 요청에 걸리므로 반드시 좁히세요.
 - **Method**: 비우면 모든 메서드.
 - 규칙이 여러 개면 **위에서부터 첫 번째로 맞는 규칙 하나만** 적용됩니다. 넓은 규칙은 아래에 두세요.
-- 규칙은 **Hachidori를 종료하면 사라집니다**(영속화는 Phase 5 예정). 자주 쓰는 본문은 파일로 따로 보관하세요.
+- 규칙은 저장되어 Hachidori를 다시 열어도 그대로 남습니다. 쓰지 않는 규칙은 지우지 말고 Enabled만 끄면 됩니다.
 - 규칙 변경은 Record 중에도 즉시 반영됩니다. 앱에서 화면을 다시 당기거나(Pull to refresh) 재진입하면 됩니다.
 
 ### 4-2. 자체 API 조작 예시
@@ -210,6 +208,11 @@ console.log = (function (orig) { return function () { orig.apply(console, argume
    (비워 두면 모든 응답이 멈춰서 앱이 먹통처럼 보이니 반드시 좁히세요.)
 2. 앱에서 해당 화면 진입 → Hachidori에 편집 시트가 뜹니다. 압축 응답도 **풀린 평문**으로 보입니다.
 3. 상태코드·헤더·본문을 고치고 **Send Edited**, 그대로 보내려면 **Send Original**, 끊으려면 **Abort**.
+   - JSON·HTML 같은 텍스트 본문은 그 자리에서 고칩니다.
+   - 파일 다운로드·이미지·PDF 같은 바이너리 본문은 **Replace with Text**로 직접 입력한 텍스트로 바꿉니다.
+     이때 `Content-Type`을 보낼 내용에 맞게(예: `text/html; charset=utf-8`) 바꾸고, `Content-Disposition`은 지우세요.
+   - 어떤 본문이든 **Replace with File…**로 Mac의 파일로 바꿀 수 있습니다. `Content-Type`은 파일 종류에 맞게 자동으로 바뀝니다.
+   - `Content-Length`와 압축 헤더(`Content-Encoding`)는 보낼 때 자동으로 맞춰지므로 손대지 않아도 됩니다.
 4. **Pause requests (before server)**를 켜면 앱이 서버로 보내는 요청의 메서드·헤더·바디를 먼저 고칠 수 있습니다.
    예: `Authorization` 헤더를 지워 보내 인증 실패 경로 확인, 요청 파라미터를 바꿔 서버 검증 확인.
 
@@ -240,7 +243,8 @@ console.log = (function (orig) { return function () { orig.apply(console, argume
 - **WebSocket**은 내용을 볼 수만 있고(Messages 탭) 바꿀 수 없습니다.
 - **HTTP/3(QUIC)** 트래픽은 프록시로 오지 않지만, 프록시가 설정되면 OS가 자동으로 HTTP/1.1·2로 내려가므로 보통 문제 없습니다.
 - 규칙 본문 교체는 **전체 교체**입니다. 부분 수정은 복사 → 수정 → 붙여넣기로 하거나 Breakpoint를 쓰세요.
-- 규칙과 캡처는 **앱 종료 시 사라집니다.**
+- 캡처한 트래픽은 **앱 종료 시 사라집니다.** 규칙과 Breakpoint의 URL 필터는 남지만, Breakpoint 일시정지 스위치는
+  실행할 때마다 꺼진 상태로 시작합니다.
 - 테스트가 끝나면 기기 Wi-Fi 프록시를 **반드시 "끔"으로 되돌리세요.** Hachidori를 끄면 기기는 인터넷이 안 됩니다.
   Mac의 시스템 프록시는 Hachidori가 Stop/종료 시 자동 원복합니다.
 - Root CA(`~/Library/Application Support/Hachidori/rootCA.pem`)는 이 Mac에서 만든 개인 키입니다. 테스트 기기에만 설치하고
@@ -255,5 +259,6 @@ console.log = (function (orig) { return function () { orig.apply(console, argume
 | HTTPS 호스트가 `ERR` / 앱만 실패 | iOS 전체 신뢰 설정, Android debug 빌드의 network_security_config, 피닝 여부 |
 | 규칙을 켰는데 응답이 그대로 | URL contains 철자, 위쪽에 먼저 걸리는 다른 규칙, 규칙 Enabled 여부, 앱 캐시(화면 재진입) |
 | WebView가 빈 화면 | Rewrite 본문의 Content-Type이 `text/html`인지, HTML이 완전한지 |
+| HTML로 바꿨는데 다운로드 화면이 뜸 | 인스펙터에 **Modified**와 바꾼 본문이 보이면 Hachidori는 제대로 보낸 것입니다. 앱이 그 요청을 다운로드 작업으로 처리해 헤더와 상관없이 파일로 저장하는 경우입니다. 오류 화면을 보려면 상태코드를 `404`/`500`으로, 다른 파일을 보이려면 같은 종류의 파일을 **Replace with File…**로 넣으세요 |
 | 앱이 멈춘 듯함 | Breakpoint URL이 비어 모든 요청이 멈춤 → 팝오버에서 토글 끄기 또는 시트에서 Send Original |
-| Mac 인터넷이 안 됨 | Hachidori가 비정상 종료돼 시스템 프록시가 남은 경우: 시스템 설정 > 네트워크 > 프록시에서 HTTP/HTTPS 프록시 해제 |
+| Mac 인터넷이 안 됨 | Hachidori가 비정상 종료돼 시스템 프록시가 남은 경우입니다. Hachidori를 다시 열면 이전 설정으로 자동 복구합니다. 다시 열 수 없다면 시스템 설정 > 네트워크 > 프록시에서 HTTP/HTTPS 프록시를 직접 해제하세요 |
